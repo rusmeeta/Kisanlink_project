@@ -1,16 +1,24 @@
-# kisanlink-backend/models_user.py
+# models_user.py - UPDATED
 from extensions import db
+from datetime import datetime
 
 class User(db.Model):
     __tablename__ = "users"
-
+    
     id = db.Column(db.Integer, primary_key=True)
-    fullname = db.Column(db.String(100), nullable=False)  # matches DB
-    username = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), nullable=False, unique=True)
-    password = db.Column(db.String(255), nullable=False)
-    total_revenue = db.Column(db.Float, default=0)  # for farmers
-
-    # Optional: add relationships if needed
-    # orders = db.relationship("Order", backref="consumer", lazy=True)
-    # cart_items = db.relationship("CartItem", backref="consumer", lazy=True)
+    fullname = db.Column(db.String(100), nullable=False)  # NOT username!
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    location = db.Column(db.String(100))
+    user_type = db.Column(db.String(20), nullable=False)  # 'farmer' or 'consumer'
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    login_count = db.Column(db.Integer, default=0)
+    last_login = db.Column(db.DateTime)
+    
+    # Remove or fix any username references
+    # If you have this line, remove it:
+    # username = db.Column(db.String(80), unique=True, nullable=False)
+    
+    def __repr__(self):
+        return f'<User {self.email}>'

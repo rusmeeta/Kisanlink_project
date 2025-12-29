@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { User, ShoppingCart, MessageCircle } from "lucide-react";
+import { ShoppingCart, MessageCircle, Bell } from "lucide-react";
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [toast, setToast] = useState("");
-  const [search, setSearch] = useState(""); // ⭐ ADDED
+  const [search, setSearch] = useState("");
 
-  // -------------------------
   // Fetch logged-in user
-  // -------------------------
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -27,16 +25,14 @@ const Dashboard = () => {
     fetchUser();
   }, []);
 
-  // -------------------------
   // Fetch cart
-  // -------------------------
   const fetchCart = async () => {
     if (!user) return;
     try {
       const res = await fetch("http://localhost:5001/cart/", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch cart");
       const data = await res.json();
-      setCart(data);
+      setCart(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       setCart([]);
@@ -47,9 +43,7 @@ const Dashboard = () => {
     fetchCart();
   }, [user]);
 
-  // -------------------------
   // Add to cart
-  // -------------------------
   const addToCart = async (product, quantity = 1) => {
     try {
       const res = await fetch("http://localhost:5001/cart/", {
@@ -73,9 +67,7 @@ const Dashboard = () => {
     }
   };
 
-  // -------------------------
-  // Fetch products & distance
-  // -------------------------
+  // Fetch products
   useEffect(() => {
     if (!user) return;
 
@@ -122,37 +114,30 @@ const Dashboard = () => {
     const deg2rad = (deg) => deg * (Math.PI / 180);
     const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) ** 2 +
       Math.cos(deg2rad(lat1)) *
-        Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) ** 2;
+      Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
-  // -------------------------
-  // ADVANCED SEARCH FILTER
-  // -------------------------
+  // Filter products
   const filteredProducts = products.filter((p) => {
     const q = search.toLowerCase();
-
     return (
-      p.item_name?.toLowerCase().includes(q) ||           // product name
-      p.farmer_name?.toLowerCase().includes(q) ||        // farmer
-      p.location?.toLowerCase().includes(q) ||           // location
-      p.category?.toLowerCase().includes(q) ||           // category (if exists)
-      p.distance?.toLowerCase().includes(q)              // distance text
+      p.item_name?.toLowerCase().includes(q) ||
+      p.farmer_name?.toLowerCase().includes(q) ||
+      p.location?.toLowerCase().includes(q) ||
+      p.category?.toLowerCase().includes(q) ||
+      p.distance?.toLowerCase().includes(q)
     );
   });
 
-  // -------------------------
-  // Render
-  // -------------------------
   return (
     <div className="min-h-screen flex bg-gray-100">
-
       {/* Sidebar */}
       <aside className="w-64 bg-white shadow-lg p-6 flex flex-col">
         <div className="mb-8 text-center">
@@ -178,21 +163,18 @@ const Dashboard = () => {
           </Link>
 
           <Link
+            to="/consumer/notifications"
+            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition"
+          >
+            Notifications
+          </Link>
+
+          <Link
             to="/consumer/messages"
             className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition"
           >
             Messages
           </Link>
-
-          <button
-            className="w-full text-left px-4 py-2 rounded-lg font-semibold text-red-600 hover:bg-red-100 hover:shadow-md mt-auto transition"
-            onClick={async () => {
-              await fetch("http://localhost:5001/auth/logout", { method: "POST", credentials: "include" });
-              window.location.href = "/login";
-            }}
-          >
-            Logout
-          </button>
         </nav>
       </aside>
 
@@ -205,9 +187,15 @@ const Dashboard = () => {
         )}
 
         <header className="bg-white shadow-md p-4 flex items-center justify-between">
-          <div className="text-2xl font-bold text-green-600">KisanLink</div>
+          {/* Left side: logo + notifications */}
+          <div className="flex items-center space-x-4">
+            <div className="text-2xl font-bold text-green-600">KisanLink</div>
+            <Link to="/consumer/notifications" className="relative">
+              <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
+            </Link>
+          </div>
 
-          {/* SEARCH BAR */}
+          {/* Search */}
           <div className="flex-1 mx-6">
             <input
               type="text"
@@ -218,6 +206,7 @@ const Dashboard = () => {
             />
           </div>
 
+          {/* Right side: cart, messages, logout */}
           <div className="flex items-center space-x-4">
             <Link to="/consumer/cart" className="relative">
               <ShoppingCart className="w-6 h-6 text-gray-700 cursor-pointer" />
@@ -232,10 +221,20 @@ const Dashboard = () => {
               <MessageCircle className="w-6 h-6 text-gray-700 cursor-pointer" />
             </Link>
 
-            <div className="flex items-center space-x-2 cursor-pointer">
-              <User className="w-6 h-6 text-gray-700" />
-              <span className="text-gray-700 font-semibold">{user?.fullname}</span>
-            </div>
+
+
+            <button
+              onClick={async () => {
+                await fetch("http://localhost:5001/auth/logout", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                window.location.href = "/login";
+              }}
+              className="text-red-600 font-semibold hover:underline"
+            >
+              Logout
+            </button>
           </div>
         </header>
 
@@ -259,9 +258,7 @@ const Dashboard = () => {
   );
 };
 
-// -------------------------
 // Product Card
-// -------------------------
 const ProductCard = ({ product, addToCart }) => {
   const [quantity, setQuantity] = React.useState(product.min_order_qty || 1);
 
@@ -327,6 +324,13 @@ const ProductCard = ({ product, addToCart }) => {
             Add
           </button>
         </div>
+        {/* Add this link for messaging the farmer */}
+        <Link
+          to={`/consumer/messages/${product.farmer_id}`}
+          className="text-green-600 text-sm font-semibold hover:underline mt-2 block"
+        >
+          Chat with Farmer
+        </Link>
       </div>
     </div>
   );

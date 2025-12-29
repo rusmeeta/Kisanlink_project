@@ -11,14 +11,17 @@ import Signup from "./pages/Signup";
 import FarmerDashboard from "./pages/farmer/Dashboard";
 import AddProduct from "./pages/farmer/AddProduct";
 import ProductList from "./pages/farmer/ProductList";
+import Report from "./pages/farmer/Report";
 
 // Consumer pages
 import ConsumerDashboard from "./pages/consumer/Dashboard";
 import Cart from "./pages/consumer/Cart";
 import Messages from "./pages/consumer/Messages";
-import axios from "axios";
-axios.defaults.withCredentials = true;
+import Notifications from "./pages/consumer/Notifications";
+import ConsumerChat from "./pages/consumer/ConsumerChat";
 
+// Import ProtectedRoute if you created it
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -29,15 +32,54 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Farmer pages */}
-        <Route path="/farmer/dashboard" element={<FarmerDashboard />} />
-        <Route path="/farmer/add-product" element={<AddProduct />} />
-        <Route path="/farmer/products" element={<ProductList />} />
+        {/* Farmer pages - Only farmers can access */}
+        <Route path="/farmer/dashboard" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <FarmerDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/add-product" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <AddProduct />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/products" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <ProductList />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/report" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <Report />
+          </ProtectedRoute>
+        } />
 
-        {/* Consumer pages */}
-        <Route path="/consumer/dashboard" element={<ConsumerDashboard />} />
-        <Route path="/consumer/cart" element={<Cart />} />
-        <Route path="/consumer/messages" element={<Messages />} />
+        {/* Consumer pages - Only consumers can access */}
+        <Route path="/consumer/dashboard" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <ConsumerDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/consumer/cart" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <Cart />
+          </ProtectedRoute>
+        } />
+        <Route path="/consumer/messages" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <Messages />
+          </ProtectedRoute>
+        } />
+        <Route path="/consumer/notifications" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <Notifications />
+          </ProtectedRoute>
+        } />
+        <Route path="/consumer/messages/:farmerId" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <ConsumerChat />
+          </ProtectedRoute>
+        } />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

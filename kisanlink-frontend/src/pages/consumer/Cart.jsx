@@ -10,6 +10,7 @@ const Cart = () => {
   const [selectedItems, setSelectedItems] = useState({});
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderDetails, setOrderDetails] = useState([]);
+  const [orderId, setOrderId] = useState(null);
 
   const fetchCart = async () => {
     try {
@@ -89,6 +90,7 @@ const Cart = () => {
 
       if (res.ok) {
         setOrderDetails(data.order_details);
+        setOrderId(data.order_id); // store the returned order ID
         setOrderPlaced(true);
       } else alert(data.message);
     } catch (err) {
@@ -98,12 +100,11 @@ const Cart = () => {
 
   const handleModalOk = () => {
     setOrderPlaced(false);
+    setOrderId(null);
     fetchCart();
-    // Navigate to messages and force reload using state
-    navigate("/consumer/messages", {replace: true  });
+    navigate("/consumer/notifications", { replace: true });
   };
 
-  // Group items by farmer
   const grouped = cart.reduce((acc, item) => {
     acc[item.farmer_name] = acc[item.farmer_name] || [];
     acc[item.farmer_name].push(item);
@@ -186,10 +187,11 @@ const Cart = () => {
       {orderPlaced && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Order Placed!</h2>
+            <h2 className="text-xl font-bold mb-2">Order Placed!</h2>
+            {orderId && <p className="mb-2 text-gray-700">Order ID: {orderId}</p>}
             <ul className="mb-4">
-              {orderDetails.map((i) => (
-                <li key={i.item_name}>
+              {orderDetails.map((i, idx) => (
+                <li key={idx}>
                   {i.item_name} - {i.quantity} kg - Rs {i.price * i.quantity}
                 </li>
               ))}

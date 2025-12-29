@@ -4,6 +4,7 @@ from models_cart import CartItem
 from models_farmer_items import FarmerItem
 from models_user import User
 from models_notification import Notification
+from models_order import Order, OrderItem
 
 cart_bp = Blueprint("cart", __name__)
 
@@ -146,9 +147,14 @@ def remove_cart_item(item_id):
     cart_data = get_cart_for_consumer(session["user_id"])
     return jsonify({"status": "success", "cart": cart_data})
 
+print("🔥 CHECKOUT ROUTE HIT")
+
+
 # -----------------------------
 # CHECKOUT
 # -----------------------------
+from models_order import Order  # Make sure this is your Order model
+
 @cart_bp.route("/checkout", methods=["POST"])
 def checkout():
     if "user_id" not in session:
@@ -161,55 +167,89 @@ def checkout():
     if not item_ids:
         return jsonify({"status": "error", "message": "No items selected"}), 400
 
-    items = (
-        db.session.query(
-            CartItem.id,
-            CartItem.quantity,
-            FarmerItem.item_name,
-            FarmerItem.price,
-            User.fullname.label("farmer_name"),
-            User.id.label("farmer_id")
+    try:
+        # Fetch selected cart items with farmer info
+        items = (
+            db.session.query(
+                CartItem.id.label("cart_id"),
+                CartItem.quantity,
+                FarmerItem.id.label("item_id"),
+                FarmerItem.item_name,
+                FarmerItem.price,
+                User.fullname.label("farmer_name"),
+                User.id.label("farmer_id")
+            )
+            .join(FarmerItem, CartItem.product_id == FarmerItem.id)
+            .join(User, FarmerItem.farmer_id == User.id)
+            .filter(CartItem.consumer_id == consumer_id, CartItem.id.in_(item_ids))
+            .all()
         )
-        .join(FarmerItem, CartItem.product_id == FarmerItem.id)
-        .join(User, FarmerItem.farmer_id == User.id)
-        .filter(CartItem.consumer_id == consumer_id, CartItem.id.in_(item_ids))
-        .all()
-    )
 
-    if not items:
-        return jsonify({"status": "error", "message": "No items found"}), 400
+        if not items:
+            return jsonify({"status": "error", "message": "No valid items found"}), 400
 
-    order_summary = []
-    for i in items:
-        order_summary.append({
-            "item_name": i.item_name,
-            "quantity": i.quantity,
-            "price": float(i.price),
-            "farmer_name": i.farmer_name
+        order_summary = []
+        order_records = []
+
+        for i in items:
+            total_price = i.quantity * i.price
+
+            # Create order record
+            order = Order(
+                consumer_id=consumer_id,
+                farmer_id=i.farmer_id,
+                item_id=i.item_id,
+                quantity=i.quantity,
+                total_price=total_price,
+                status="placed"
+            )
+            db.session.add(order)
+            order_records.append(order)
+
+            # Append to order summary for frontend modal
+            order_summary.append({
+                "item_name": i.item_name,
+                "quantity": i.quantity,
+                "price": float(i.price),
+                "farmer_name": i.farmer_name
+            })
+
+        db.session.flush()  # Flush to assign IDs to orders
+
+        # Notify farmers
+        for order in order_records:
+            note = Notification(
+                user_id=order.farmer_id,
+                message=f"{order.quantity} kg of {order_summary[0]['item_name']} has been ordered by a consumer.",
+                order_id=order.id
+            )
+            db.session.add(note)
+
+        # Delete ordered cart items
+        CartItem.query.filter(
+            CartItem.consumer_id == consumer_id,
+            CartItem.id.in_(item_ids)
+        ).delete(synchronize_session=False)
+
+        # Notify consumer
+        details = ", ".join([f"{i['quantity']} kg of {i['item_name']} - Rs {i['quantity']*i['price']}" for i in order_summary])
+        consumer_note = Notification(
+            user_id=consumer_id,
+            message=f"Your order has been placed successfully: {details}",
+            order_id=order_records[0].id if order_records else None
+        )
+        db.session.add(consumer_note)
+
+        db.session.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Your order has been placed successfully",
+            "order_details": order_summary,
+            "order_id": order_records[0].id if order_records else None
         })
 
-        # Notify farmer
-        note = Notification(
-            user_id=i.farmer_id,
-            message=f"{i.quantity} kg of {i.item_name} has been ordered by a consumer."
-        )
-        db.session.add(note)
-
-    # Delete only the ordered cart items
-    CartItem.query.filter(CartItem.consumer_id == consumer_id, CartItem.id.in_(item_ids)).delete(synchronize_session=False)
-
-    # -----------------------------
-    # Notify consumer with itemized message
-    details = ", ".join([f"{i.quantity} kg of {i.item_name} - Rs {i.quantity * i.price}" for i in items])
-    consumer_note = Notification(
-        user_id=consumer_id,
-        message=f"Your order has been placed successfully: {details}"
-    )
-    db.session.add(consumer_note)
-    db.session.commit()
-
-    return jsonify({
-        "status": "success",
-        "message": "Your order has been placed successfully",
-        "order_details": order_summary
-    })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "Something went wrong during checkout"}), 500
