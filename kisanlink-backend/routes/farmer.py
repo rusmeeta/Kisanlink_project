@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify, send_from_directory, session
 from werkzeug.utils import secure_filename
 from db import get_db_connection
+from datetime import datetime, timedelta
 
 # Create a Flask blueprint for farmer-related routes
 farmer_bp = Blueprint("farmer", __name__)
@@ -27,10 +28,33 @@ location_coords = {
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Helper function to calculate time ago
+def get_time_ago(date_string):
+    if not date_string:
+        return "Just now"
+    
+    try:
+        date = datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
+        diff = now - date
+        
+        if diff.days > 0:
+            return f"{diff.days}d ago"
+        elif diff.seconds // 3600 > 0:
+            return f"{diff.seconds // 3600}h ago"
+        elif diff.seconds // 60 > 0:
+            return f"{diff.seconds // 60}m ago"
+        else:
+            return "Just now"
+    except:
+        return ""
+
 # Serve uploaded images from the server
 @farmer_bp.route("/uploads/<filename>")
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
+
+# ==================== DASHBOARD ENDPOINTS ====================
 
 # ------------------ Farmer Info ------------------
 @farmer_bp.route("/me", methods=["GET"])
@@ -47,7 +71,7 @@ def get_farmer_info():
         cur = conn.cursor()
         # Fetch farmer details from users table
         cur.execute("""
-            SELECT id, fullname, email, location, latitude, longitude, user_type
+            SELECT id, fullname, email, location, latitude, longitude, user_type, last_login
             FROM users
             WHERE id=%s
         """, (farmer_id,))
@@ -66,7 +90,8 @@ def get_farmer_info():
             "location": row[3],
             "latitude": row[4],
             "longitude": row[5],
-            "user_type": row[6]
+            "user_type": row[6],
+            "last_login": row[7].strftime("%Y-%m-%d %H:%M:%S") if row[7] else None
         }
 
         return jsonify(farmer), 200
@@ -74,6 +99,281 @@ def get_farmer_info():
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
+
+# ------------------ Get Complete Dashboard Stats ------------------
+@farmer_bp.route("/stats", methods=["GET"])
+def get_farmer_stats():
+    """
+    Get complete stats for farmer dashboard
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 1. Total products count
+        cur.execute("SELECT COUNT(*) FROM farmer_items WHERE farmer_id=%s", (farmer_id,))
+        total_products = cur.fetchone()[0]
+        
+        # 2. Total orders count
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
+        total_orders = cur.fetchone()[0]
+        
+        # 3. Total revenue (sum of all orders)
+        cur.execute("SELECT COALESCE(SUM(total_price), 0) FROM orders WHERE farmer_id=%s", (farmer_id,))
+        total_revenue = float(cur.fetchone()[0])
+        
+        # 4. Unique customers count
+        cur.execute("""
+            SELECT COUNT(DISTINCT consumer_id) 
+            FROM orders 
+            WHERE farmer_id=%s
+        """, (farmer_id,))
+        unique_customers = cur.fetchone()[0]
+        
+        # 5. Pending orders count
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s AND status='pending'", (farmer_id,))
+        pending_orders = cur.fetchone()[0]
+        
+        # 6. Today's orders
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur.execute("""
+            SELECT COUNT(*) 
+            FROM orders 
+            WHERE farmer_id=%s AND DATE(order_date)=%s
+        """, (farmer_id, today))
+        today_orders = cur.fetchone()[0]
+        
+        # 7. Average order value
+        avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
+        
+        # 8. Completion rate (completed orders / total orders)
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s AND status='completed'", (farmer_id,))
+        completed_orders = cur.fetchone()[0]
+        completion_rate = (completed_orders / total_orders * 100) if total_orders > 0 else 0
+        
+        cur.close()
+        conn.close()
+        
+        stats = {
+            "total_products": total_products,
+            "total_orders": total_orders,
+            "total_revenue": total_revenue,
+            "unique_customers": unique_customers,
+            "pending_orders": pending_orders,
+            "today_orders": today_orders,
+            "avg_order_value": round(avg_order_value, 2),
+            "completion_rate": round(completion_rate, 1),
+            "pending_notifications": 0  # Will be set from notifications endpoint
+        }
+        
+        return jsonify({"status": "success", "stats": stats}), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ------------------ Get Recent Orders ------------------
+@farmer_bp.route("/orders/recent", methods=["GET"])
+def get_recent_orders():
+    """
+    Get recent orders for dashboard
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get last 10 orders
+        cur.execute("""
+            SELECT o.id, o.consumer_id, o.item_id, o.quantity, o.total_price, 
+                   o.status, o.order_date, u.fullname as consumer_name,
+                   fi.item_name as product_name
+            FROM orders o
+            LEFT JOIN users u ON o.consumer_id = u.id
+            LEFT JOIN farmer_items fi ON o.item_id = fi.id
+            WHERE o.farmer_id=%s
+            ORDER BY o.order_date DESC
+            LIMIT 10
+        """, (farmer_id,))
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        orders = []
+        for row in rows:
+            orders.append({
+                "id": row[0],
+                "consumer_id": row[1],
+                "item_id": row[2],
+                "quantity": row[3],
+                "total_price": float(row[4]) if row[4] else 0,
+                "status": row[5],
+                "order_date": row[6].strftime("%Y-%m-%d %H:%M:%S") if row[6] else None,
+                "consumer_name": row[7] or f"Customer {row[1]}",
+                "product_name": row[8] or f"Product {row[2]}",
+                "time_ago": get_time_ago(row[6].strftime("%Y-%m-%d %H:%M:%S") if row[6] else "")
+            })
+        
+        return jsonify({"status": "success", "orders": orders, "count": len(orders)}), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ------------------ Get Orders Count ------------------
+@farmer_bp.route("/orders/count", methods=["GET"])
+def get_orders_count():
+    """
+    Get total orders count for farmer
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
+        count = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({"status": "success", "count": count}), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ------------------ Get Unique Customers Count ------------------
+@farmer_bp.route("/orders/customers", methods=["GET"])
+def get_unique_customers():
+    """
+    Get unique customers count for farmer
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT COUNT(DISTINCT consumer_id) 
+            FROM orders 
+            WHERE farmer_id=%s
+        """, (farmer_id,))
+        count = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({"status": "success", "count": count}), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ------------------ Get Dashboard Summary ------------------
+@farmer_bp.route("/dashboard/summary", methods=["GET"])
+def get_dashboard_summary():
+    """
+    Get complete dashboard summary in one call
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get farmer info
+        cur.execute("""
+            SELECT id, fullname, email, location, user_type
+            FROM users
+            WHERE id=%s
+        """, (farmer_id,))
+        farmer_row = cur.fetchone()
+        
+        if not farmer_row:
+            return jsonify({"error": "Farmer not found"}), 404
+        
+        farmer_info = {
+            "id": farmer_row[0],
+            "fullname": farmer_row[1],
+            "email": farmer_row[2],
+            "location": farmer_row[3],
+            "user_type": farmer_row[4]
+        }
+        
+        # Get stats
+        cur.execute("SELECT COUNT(*) FROM farmer_items WHERE farmer_id=%s", (farmer_id,))
+        total_products = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
+        total_orders = cur.fetchone()[0]
+        
+        cur.execute("""
+            SELECT COUNT(DISTINCT consumer_id) 
+            FROM orders 
+            WHERE farmer_id=%s
+        """, (farmer_id,))
+        unique_customers = cur.fetchone()[0]
+        
+        # Get recent orders (5)
+        cur.execute("""
+            SELECT o.id, o.consumer_id, o.quantity, o.total_price, 
+                   o.status, o.order_date, u.fullname as consumer_name
+            FROM orders o
+            LEFT JOIN users u ON o.consumer_id = u.id
+            WHERE o.farmer_id=%s
+            ORDER BY o.order_date DESC
+            LIMIT 5
+        """, (farmer_id,))
+        
+        order_rows = cur.fetchall()
+        recent_orders = []
+        for row in order_rows:
+            recent_orders.append({
+                "id": row[0],
+                "consumer_id": row[1],
+                "quantity": row[2],
+                "total_price": float(row[3]) if row[3] else 0,
+                "status": row[4],
+                "order_date": row[5].strftime("%Y-%m-%d %H:%M:%S") if row[5] else None,
+                "consumer_name": row[6] or f"Customer {row[1]}"
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "farmer": farmer_info,
+            "stats": {
+                "total_products": total_products,
+                "total_orders": total_orders,
+                "unique_customers": unique_customers
+            },
+            "recent_orders": recent_orders
+        }), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ==================== PRODUCT ENDPOINTS ====================
 
 # ------------------ Add Product ------------------
 @farmer_bp.route("/add-product", methods=["POST"])
@@ -257,3 +557,32 @@ def delete_product(product_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ==================== TEST ENDPOINTS ====================
+
+@farmer_bp.route("/test", methods=["GET"])
+def test_endpoint():
+    """Test endpoint to verify farmer routes are working"""
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+            
+        return jsonify({
+            "status": "success",
+            "message": "Farmer endpoints are working",
+            "farmer_id": farmer_id,
+            "endpoints": [
+                "/farmer/me",
+                "/farmer/stats",
+                "/farmer/products",
+                "/farmer/orders/recent",
+                "/farmer/dashboard/summary"
+            ]
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@farmer_bp.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "healthy", "service": "farmer"})

@@ -1,3 +1,4 @@
+# notifications.py - FIXED VERSION
 from flask import Blueprint, jsonify, session
 from extensions import db
 from models_notification import Notification
@@ -18,21 +19,24 @@ def get_notifications():
 
     data = []
     for n in notifications:
-        # Default farmer_id to None
+        # Default farmer_id and consumer_id to None
         farmer_id = None
+        consumer_id = None
 
-        # If order_id exists, get farmer_id from the order
+        # If order_id exists, get farmer_id and consumer_id from the order
         if n.order_id:
             order = Order.query.get(n.order_id)
             if order:
                 farmer_id = order.farmer_id
+                consumer_id = order.consumer_id  # CRITICAL: Get consumer ID!
 
         data.append({
             "id": n.id,
             "order_id": getattr(n, "order_id", None),
             "message": n.message,
             "target_role": getattr(n, "target_role", None),
-            "farmer_id": farmer_id,   # <-- added
+            "farmer_id": farmer_id,
+            "consumer_id": consumer_id,  # ADD THIS LINE
             "is_read": getattr(n, "is_read", False),
             "created_at": n.created_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(n, "created_at", None) else None
         })

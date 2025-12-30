@@ -12,6 +12,9 @@ import FarmerDashboard from "./pages/farmer/Dashboard";
 import AddProduct from "./pages/farmer/AddProduct";
 import ProductList from "./pages/farmer/ProductList";
 import Report from "./pages/farmer/Report";
+import FarmerMessages from "./pages/farmer/Messages";
+import FarmerNotifications from "./pages/farmer/Notifications"; 
+import FarmerChat from "./pages/farmer/FarmerChat"; // Fixed: Use FarmerChat (not duplicate)
 
 // Consumer pages
 import ConsumerDashboard from "./pages/consumer/Dashboard";
@@ -51,6 +54,21 @@ function App() {
         <Route path="/farmer/report" element={
           <ProtectedRoute allowedUserType="farmer">
             <Report />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/messages" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <FarmerMessages />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/notifications" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <FarmerNotifications />
+          </ProtectedRoute>
+        } />
+        <Route path="/farmer/chat/:consumerId" element={
+          <ProtectedRoute allowedUserType="farmer">
+            <FarmerChat />
           </ProtectedRoute>
         } />
 
