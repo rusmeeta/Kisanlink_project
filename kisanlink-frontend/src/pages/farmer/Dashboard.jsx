@@ -1,8 +1,9 @@
-// src/pages/farmer/Dashboard.jsx
+// src/pages/farmer/Dashboard.jsx - UPDATED WITH PROPER ROUTING
 import React, { useEffect, useState } from "react";
 import AddProduct from "./AddProduct";
 import ProductList from "./ProductList";
 import Report from "./Report";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
   Package, Users, ShoppingCart, Clock, AlertCircle
@@ -24,6 +25,8 @@ const FarmerDashboard = () => {
     notifications: 0,
     messages: 0
   });
+
+  const navigate = useNavigate();
 
   // Real-time polling interval (10 seconds)
   const POLL_INTERVAL = 10000;
@@ -67,26 +70,24 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch messages - FIXED: Using correct endpoint
+  // Fetch messages
   const fetchMessages = async () => {
     try {
-      const res = await fetch("http://localhost:5001/messages/conversations", {
+      const res = await fetch("http://localhost:5001/messages/farmer-conversations", {
         method: "GET",
         credentials: "include",
       });
-      
+
       if (res.ok) {
         const data = await res.json();
-        
+
         if (data.status === "success") {
-          // Filter conversations where farmer is involved
-          const conversations = data.conversations || [];
-          setMessages(conversations);
-          
-          // Since messages.py doesn't track unread count for farmers,
-          // we'll set it to 0 for now, or count all conversations
-          const unreadCount = conversations.length > 0 ? 1 : 0; // Temporary
+          setMessages(data.conversations || []);
+          const unreadCount = data.conversations.length;
           setUnreadCounts(prev => ({ ...prev, messages: unreadCount }));
+        } else {
+          console.log("Messages endpoint returned:", data.status, data.message);
+          setMessages([]);
         }
       } else {
         console.log("Messages endpoint returned:", res.status);
@@ -145,42 +146,39 @@ const FarmerDashboard = () => {
   };
 
   // Fetch recent notifications as "recent orders" from notifications table
-  // Update fetchRecentOrders function in Dashboard.jsx
-const fetchRecentOrders = async () => {
-  try {
-    // Use the existing notifications endpoint instead
-    const res = await fetch("http://localhost:5001/notifications", {
-      method: "GET",
-      credentials: "include",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      // Map notifications to order-like format
-      const recentNotifs = data.notifications.map((notif, idx) => ({
-        id: notif.id || idx + 1,
-        type: "order", // Default to order type
-        message: notif.message,
-        time: formatTimeAgo(notif.created_at),
-        status: getStatusFromMessage(notif.message), // New helper function
-        priority: "medium"
-      }));
-      setRecentOrders(recentNotifs);
+  const fetchRecentOrders = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/notifications", {
+        method: "GET",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const recentNotifs = data.notifications.map((notif, idx) => ({
+          id: notif.id || idx + 1,
+          type: "order",
+          message: notif.message,
+          time: formatTimeAgo(notif.created_at),
+          status: getStatusFromMessage(notif.message),
+          priority: "medium"
+        }));
+        setRecentOrders(recentNotifs);
+      }
+    } catch (err) {
+      console.error("Error fetching recent orders:", err);
+      setRecentOrders([]);
     }
-  } catch (err) {
-    console.error("Error fetching recent orders:", err);
-    setRecentOrders([]);
-  }
-};
+  };
 
-// Add this helper function to Dashboard.jsx
-const getStatusFromMessage = (message) => {
-  const msg = message.toLowerCase();
-  if (msg.includes('delivered') || msg.includes('completed')) return 'delivered';
-  if (msg.includes('confirmed') || msg.includes('processing')) return 'processing';
-  if (msg.includes('cancelled') || msg.includes('failed')) return 'cancelled';
-  if (msg.includes('ordered') || msg.includes('placed')) return 'pending';
-  return 'info';
-};
+  // Helper function to get status from message
+  const getStatusFromMessage = (message) => {
+    const msg = message.toLowerCase();
+    if (msg.includes('delivered') || msg.includes('completed')) return 'delivered';
+    if (msg.includes('confirmed') || msg.includes('processing')) return 'processing';
+    if (msg.includes('cancelled') || msg.includes('failed')) return 'cancelled';
+    if (msg.includes('ordered') || msg.includes('placed')) return 'pending';
+    return 'info';
+  };
 
   // Helper: Format time ago
   const formatTimeAgo = (dateString) => {
@@ -196,17 +194,6 @@ const getStatusFromMessage = (message) => {
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
-  };
-
-  // Helper: Get status from notification type
-  const getStatusFromType = (type) => {
-    switch (type) {
-      case 'order_placed': return 'pending';
-      case 'order_confirmed': return 'processing';
-      case 'order_delivered': return 'delivered';
-      case 'order_cancelled': return 'cancelled';
-      default: return 'info';
-    }
   };
 
   // Initial fetch
@@ -244,13 +231,14 @@ const getStatusFromMessage = (message) => {
     }
   };
 
+  // Dashboard tabs only - REMOVE messages from here
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
     { id: "addProduct", label: "Add Product" },
     { id: "productList", label: "Product List" },
     { id: "reports", label: "Reports" },
     { id: "notifications", label: `Notifications (${unreadCounts.notifications})` },
-    { id: "messages", label: `Messages (${unreadCounts.messages})` },
+    // REMOVED: { id: "messages", label: `Messages (${unreadCounts.messages})` },
   ];
 
   return (
@@ -270,14 +258,27 @@ const getStatusFromMessage = (message) => {
             <button
               key={tab.id}
               className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === tab.id
-                  ? "bg-green-600 text-white shadow-md"
-                  : "text-gray-700 hover:bg-green-100"
+                ? "bg-green-600 text-white shadow-md"
+                : "text-gray-700 hover:bg-green-100"
                 }`}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
             </button>
           ))}
+          
+          {/* SEPARATE LINK FOR MESSAGES - Navigates to /farmer/messages */}
+          <Link
+            to="/farmer/messages"
+            className="block w-full text-left px-4 py-2 rounded-lg font-semibold transition text-gray-700 hover:bg-green-100 relative"
+          >
+            Messages
+            {unreadCounts.messages > 0 && (
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                {unreadCounts.messages}
+              </span>
+            )}
+          </Link>
         </nav>
       </aside>
 
@@ -292,9 +293,7 @@ const getStatusFromMessage = (message) => {
 
           {/* Right Side: Real-time indicators */}
           <div className="flex items-center space-x-4">
-
-
-            {/* Notifications */}
+            {/* Notifications - stays in dashboard */}
             <button
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
               onClick={() => setActiveTab("notifications")}
@@ -308,10 +307,10 @@ const getStatusFromMessage = (message) => {
               )}
             </button>
 
-            {/* Messages */}
+            {/* Messages - Navigates to /farmer/messages */}
             <button
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              onClick={() => setActiveTab("messages")}
+              onClick={() => navigate("/farmer/messages")}
               title={`${unreadCounts.messages} unread messages`}
             >
               <MessageCircle className="w-6 h-6 text-green-600" />
@@ -427,9 +426,9 @@ const getStatusFromMessage = (message) => {
                       <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                         <div className="flex items-center space-x-3">
                           <div className={`w-3 h-3 rounded-full ${activity.status === 'delivered' ? 'bg-green-500' :
-                              activity.status === 'processing' ? 'bg-yellow-500' :
-                                activity.status === 'cancelled' ? 'bg-red-500' :
-                                  'bg-blue-500'
+                            activity.status === 'processing' ? 'bg-yellow-500' :
+                              activity.status === 'cancelled' ? 'bg-red-500' :
+                                'bg-blue-500'
                             }`}></div>
                           <div>
                             <h4 className="font-semibold text-gray-800">{activity.message}</h4>
@@ -503,7 +502,7 @@ const getStatusFromMessage = (message) => {
                       Add New Product
                     </button>
                     <button
-                      onClick={() => setActiveTab("messages")}
+                      onClick={() => navigate("/farmer/messages")}
                       className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition"
                     >
                       Check Messages
@@ -552,69 +551,8 @@ const getStatusFromMessage = (message) => {
           </div>
         )}
 
-        {activeTab === "messages" && (
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-green-700 mb-2">Customer Messages</h2>
-                <p className="text-gray-500">Communicate with your customers</p>
-              </div>
-              <button
-                onClick={fetchMessages}
-                className="text-sm text-green-600 hover:text-green-700"
-              >
-                Refresh
-              </button>
-            </div>
-            
-            {messages.length === 0 ? (
-              <div className="text-center py-12">
-                <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-700 mb-2">No conversations yet</h3>
-                <p className="text-gray-500 max-w-md mx-auto">
-                  When customers message you about your products, conversations will appear here.
-                </p>
-                <p className="text-sm text-gray-400 mt-4">
-                  Customers can message you by clicking "Chat with Farmer" on your product listings
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((conversation, index) => (
-                  <div
-                    key={index}
-                    onClick={() => window.location.href = `/farmer/chat/${conversation.farmer_id}`}
-                    className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold">
-                          {conversation.farmer_name?.[0] || "C"}
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-800">
-                            {conversation.farmer_name || `Customer ${conversation.farmer_id}`}
-                          </h3>
-                          <p className="text-gray-600 text-sm mt-1 truncate max-w-md">
-                            {conversation.last_message || "No messages yet"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500">
-                          {conversation.last_msg_time ? formatTimeAgo(conversation.last_msg_time) : ""}
-                        </p>
-                        <button className="mt-2 text-sm text-green-600 hover:text-green-700">
-                          View Chat →
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* REMOVED the messages tab content since it will be on a separate page */}
+        {/* Messages are now at /farmer/messages route */}
       </main>
     </div>
   );

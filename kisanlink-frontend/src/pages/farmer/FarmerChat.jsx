@@ -1,234 +1,136 @@
-// src/pages/farmer/FarmerChat.jsx - FIXED
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, User, MapPin, Clock, MessageCircle } from 'lucide-react'; // Added MessageCircle
+// src/pages/farmer/FarmerChat.jsx
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Send, Clock } from "lucide-react";
 
 const FarmerChat = () => {
   const { consumerId } = useParams();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [consumerInfo, setConsumerInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [newMessage, setNewMessage] = useState("");
+  const [farmerId, setFarmerId] = useState(null); // Current farmer ID
   const messagesEndRef = useRef(null);
 
-  // Fetch conversation
-  const fetchConversation = async () => {
+  // Fetch current farmer info
+  const fetchFarmer = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/farmer/me", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFarmerId(data.id);
+      }
+    } catch (err) {
+      console.error("Error fetching farmer info:", err);
+    }
+  };
+
+  // Fetch messages with the specific consumer
+  const fetchMessages = async () => {
     try {
       const res = await fetch(`http://localhost:5001/messages/${consumerId}`, {
-        credentials: 'include'
+        credentials: "include",
       });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'success') {
-          setMessages(data.messages || []);
-        }
-      }
+      const data = await res.json();
+      if (data.status === "success") setMessages(data.messages || []);
     } catch (err) {
-      console.error('Error fetching conversation:', err);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching messages:", err);
     }
   };
 
-  // Fetch consumer info
-  const fetchConsumerInfo = async () => {
-    try {
-      const res = await fetch(`http://localhost:5001/users/${consumerId}`, {
-        credentials: 'include'
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setConsumerInfo(data);
-      }
-    } catch (err) {
-      console.error('Error fetching consumer info:', err);
-    }
-  };
-
-  // Send message
+  // Send a new message
   const sendMessage = async () => {
-    if (!newMessage.trim() || sending) return;
+    if (!newMessage.trim()) return;
 
     try {
-      setSending(true);
       const res = await fetch(`http://localhost:5001/messages/${consumerId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: newMessage.trim()
-        })
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: newMessage }),
       });
+      const data = await res.json();
+      console.log("Send message response:", data); // Debug
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'success') {
-          setMessages(prev => [...prev, data.data]);
-          setNewMessage('');
-        }
+      if (data.status === "success") {
+        setMessages((prev) => [...prev, data.data]);
+        setNewMessage("");
       }
     } catch (err) {
-      console.error('Error sending message:', err);
-    } finally {
-      setSending(false);
+      console.error("Error sending message:", err);
     }
   };
 
-  // Set up polling for new messages
+  // Auto-scroll to bottom whenever messages change
   useEffect(() => {
-    fetchConversation();
-    fetchConsumerInfo();
-    
-    const interval = setInterval(fetchConversation, 3000);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Fetch farmer info once
+  useEffect(() => {
+    fetchFarmer();
+  }, []);
+
+  // Poll messages every 3 seconds
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [consumerId]);
 
-  // Scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const formatTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading conversation...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-center py-4">
-            <button
-              onClick={() => navigate('/farmer/messages')}
-              className="p-2 hover:bg-gray-100 rounded-full mr-3"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            
-            {consumerInfo ? (
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                  <User className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <h1 className="font-semibold text-gray-800">{consumerInfo.fullname}</h1>
-                  <div className="flex items-center text-sm text-gray-500">
-                    <MapPin className="w-3 h-3 mr-1" />
-                    <span>{consumerInfo.location || 'Unknown location'}</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <h1 className="font-semibold text-gray-800">Customer {consumerId}</h1>
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="bg-white shadow p-4 flex items-center">
+        <button onClick={() => navigate("/farmer/messages")}>
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <h1 className="ml-3 font-semibold">Chat with Customer {consumerId}</h1>
       </div>
 
-      {/* Messages Area */}
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-sm border">
-          {/* Messages */}
-          <div className="h-[calc(100vh-280px)] overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-6">
-                  <MessageCircle className="w-10 h-10 text-green-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Start Conversation</h3>
-                <p className="text-gray-600 max-w-sm mb-4">
-                  Chat with {consumerInfo?.fullname || `Customer ${consumerId}`} about their order
-                </p>
-              </div>
-            ) : (
-              messages.map((msg) => {
-                const isFarmer = msg.sender_id !== parseInt(consumerId);
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isFarmer ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-xs lg:max-w-md rounded-lg px-4 py-3 ${isFarmer
-                          ? 'bg-green-600 text-white rounded-br-none'
-                          : 'bg-gray-100 text-gray-800 rounded-bl-none'
-                        }`}
-                    >
-                      <p className="text-sm">{msg.message}</p>
-                      <div className={`flex items-center justify-end mt-1 ${isFarmer ? 'text-green-100' : 'text-gray-500'}`}>
-                        <Clock className="w-3 h-3 mr-1" />
-                        <span className="text-xs">{formatTime(msg.created_at)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {messages.map((m) => {
+          const isFarmer = farmerId && m.sender_id === farmerId;
 
-          {/* Input Area */}
-          <div className="border-t p-4">
-            <div className="flex space-x-3">
-              <textarea
-                className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder={`Type your message to ${consumerInfo?.fullname || `Customer ${consumerId}`}...`}
-                rows="2"
-                disabled={sending}
-              />
-              <button
-                onClick={sendMessage}
-                disabled={!newMessage.trim() || sending}
-                className="self-end bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+          return (
+            <div key={m.id} className={`flex ${isFarmer ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`px-4 py-2 rounded-lg max-w-xs break-words ${
+                  isFarmer ? "bg-green-600 text-white" : "bg-gray-100 text-gray-800"
+                }`}
               >
-                {sending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                  </>
-                )}
-              </button>
+                <p>{m.message}</p>
+                <div className="text-xs text-gray-200 mt-1 flex items-center justify-end">
+                  <Clock className="w-3 h-3 mr-1" />
+                  {new Date(m.created_at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="bg-white p-4 border-t flex space-x-2">
+        <textarea
+          className="flex-1 border rounded-lg p-2 resize-none"
+          rows={2}
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type your message..."
+          onKeyDown={(e) =>
+            e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())
+          }
+        />
+        <button onClick={sendMessage} className="bg-green-600 text-white px-4 py-2 rounded-lg">
+          <Send className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

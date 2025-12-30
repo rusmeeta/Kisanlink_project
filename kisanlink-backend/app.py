@@ -16,6 +16,7 @@ from routes.products import products_bp
 from routes.cart import cart_bp
 from routes.notifications import notifications_bp
 from routes.messages import messages_bp
+from routes.simple_messages import simple_bp
 
 # ------------------------------
 # Initialize Flask app
@@ -60,6 +61,8 @@ app.register_blueprint(products_bp, url_prefix="/products")
 app.register_blueprint(cart_bp, url_prefix="/cart")
 app.register_blueprint(notifications_bp, url_prefix="/notifications")
 app.register_blueprint(messages_bp, url_prefix="/messages")
+
+app.register_blueprint(simple_bp, url_prefix="/simple")
 
 
 # ------------------------------

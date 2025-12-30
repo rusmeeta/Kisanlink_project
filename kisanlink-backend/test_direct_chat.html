@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Chat Test - KisanLink</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #2d3436;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #636e72;
+            font-size: 1.1em;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h3 {
+            color: #2d3436;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #74b9ff;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2d3436;
+            font-weight: 500;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dfe6e9;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #74b9ff;
+        }
+        
+        button {
+            background: #00b894;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background: #00a085;
+        }
+        
+        button.secondary {
+            background: #74b9ff;
+        }
+        
+        button.secondary:hover {
+            background: #0984e3;
+        }
+        
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .messages-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .message {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            animation: fadeIn 0.3s;
+        }
+        
+        .sent {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .received {
+            background: #f1f8e9;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .message-text {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .conversation-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #00b894;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .conversation-item:hover {
+            background: #e9ecef;
+        }
+        
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-top: 3px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .user-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+        
+        .farmer-badge {
+            background: #ffeb3b;
+            color: #ff8f00;
+        }
+        
+        .consumer-badge {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📱 KisanLink Direct Chat Test</h1>
+            <p class="subtitle">Simple messaging between any users - No authentication needed</p>
+            <p class="subtitle">API Base: <code>http://localhost:5001/direct</code></p>
+        </header>
+        
+        <div class="grid">
+            <!-- Send Message Card -->
+            <div class="card">
+                <h3>📨 Send New Message</h3>
+                <div class="form-group">
+                    <label for="sender_id">Sender ID:</label>
+                    <input type="number" id="sender_id" value="29" placeholder="e.g., 29 (consumer)">
+                </div>
+                <div class="form-group">
+                    <label for="receiver_id">Receiver ID:</label>
+                    <input type="number" id="receiver_id" value="28" placeholder="e.g., 28 (farmer)">
+                </div>
+                <div class="form-group">
+                    <label for="message_text">Message:</label>
+                    <textarea id="message_text" rows="3" placeholder="Type your message here..."></textarea>
+                </div>
+                <button onclick="sendMessage()">Send Message</button>
+                <div id="sendResult" class="result"></div>
+            </div>
+            
+            <!-- View Conversation Card -->
+            <div class="card">
+                <h3>💬 View Conversation</h3>
+                <div class="form-group">
+                    <label for="user1_id">User 1 ID:</label>
+                    <input type="number" id="user1_id" value="29" placeholder="First user ID">
+                </div>
+                <div class="form-group">
+                    <label for="user2_id">User 2 ID:</label>
+                    <input type="number" id="user2_id" value="28" placeholder="Second user ID">
+                </div>
+                <button onclick="getMessages()">Load Conversation</button>
+                <button class="secondary" onclick="refreshMessages()">🔄 Refresh</button>
+                
+                <div id="messagesContainer" class="messages-container"></div>
+            </div>
+            
+            <!-- User Conversations Card -->
+            <div class="card">
+                <h3>👥 User Conversations</h3>
+                <div class="form-group">
+                    <label for="conv_user_id">User ID:</label>
+                    <input type="number" id="conv_user_id" value="28" placeholder="User ID to get conversations">
+                </div>
+                <button onclick="getConversations()">Get Conversations</button>
+                
+                <div id="conversationsList" class="messages-container"></div>
+            </div>
+        </div>
+        
+        <!-- Database Info Card -->
+        <div class="card">
+            <h3>📊 Database Information</h3>
+            <div class="stats">
+                <div><strong>Current Users:</strong> 22 (Rudra), 28 (Milan), 29 (Prazen)</div>
+                <div><strong>Farmer IDs:</strong> 22, 24, 25, 27, 28</div>
+                <div><strong>Consumer IDs:</strong> 29, 30</div>
+            </div>
+            <button class="secondary" onclick="testAll()">Test All Endpoints</button>
+            <button class="secondary" onclick="clearResults()">Clear All Results</button>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:5001/direct';
+        
+        // Send a message
+        async function sendMessage() {
+            const sender_id = document.getElementById('sender_id').value;
+            const receiver_id = document.getElementById('receiver_id').value;
+            const message = document.getElementById('message_text').value;
+            
+            if (!sender_id || !receiver_id || !message) {
+                showResult('sendResult', 'Please fill all fields!', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sender_id: parseInt(sender_id),
+                        receiver_id: parseInt(receiver_id),
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('sendResult', 
+                        `✅ Message sent! ID: ${data.message.id}<br>
+                        From: ${data.message.sender_id} → To: ${data.message.receiver_id}<br>
+                        Time: ${data.message.created_at}`, 
+                        'success'
+                    );
+                    document.getElementById('message_text').value = '';
+                    // Auto-refresh conversations
+                    getMessages();
+                } else {
+                    showResult('sendResult', `❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('sendResult', `❌ Network error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Get messages between two users
+        async function getMessages() {
+            const user1 = document.getElementById('user1_id').value;
+            const user2 = document.getElementById('user2_id').value;
+            
+            if (!user1 || !user2) {
+                alert('Please enter both user IDs');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/between/${user1}/${user2}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('messagesContainer');
+                
+                if (data.success && data.messages.length > 0) {
+                    let html = `<div class="stats">
+                        <span>📊 ${data.messages.length} messages total</span>
+                    </div>`;
+                    
+                    data.messages.forEach(msg => {
+                        const isUser1 = msg.sender_id == user1;
+                        const direction = isUser1 ? '→' : '←';
+                        const badge = msg.sender_name ? 
+                            (msg.sender_name.includes('Prazen') || msg.sender_name.includes('Pritiza') ? 
+                                '<span class="user-badge consumer-badge">Consumer</span>' : 
+                                '<span class="user-badge farmer-badge">Farmer</span>') : '';
+                        
+                        html += `
+                            <div class="message ${isUser1 ? 'sent' : 'received'}">
+                                <div class="message-header">
+                                    <span>👤 ${msg.sender_name || 'User '+msg.sender_id} ${badge}</span>
+                                    <span>${msg.created_at}</span>
+                                </div>
+                                <div class="message-text">${msg.message}</div>
+                                <div class="timestamp">ID: ${msg.id} | ${direction} ${msg.receiver_name || 'User '+msg.receiver_id}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML = html;
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.innerHTML = `<div class="result">No messages found between User ${user1} and User ${user2}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('messagesContainer').innerHTML = 
+                    `<div class="result error">Error loading messages: ${error.message}</div>`;
+            }
+        }
+        
+        // Refresh messages
+        function refreshMessages() {
+            getMessages();
+        }
+        
+        // Get conversations for a user
+        async function getConversations() {
+            const userId = document.getElementById('conv_user_id').value;
+            
+            if (!userId) {
+                alert('Please enter a user ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/conversations/${userId}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('conversationsList');
+                
+                if (data.success && data.conversations.length > 0) {
+                    let html = `<div class="stats">
+                        <span>📊 User ${userId} has ${data.conversations.length} conversations</span>
+                    </div>`;
+                    
+                    data.conversations.forEach(conv => {
+                        const badge = conv.other_user_type === 'farmer' ? 
+                            '<span class="user-badge farmer-badge">Farmer</span>' : 
+                            '<span class="user-badge consumer-badge">Consumer</span>';
+                        
+                        html += `
+                            <div class="conversation-item" onclick="loadConversation(${userId}, ${conv.other_user_id})">
+                                <strong>👤 ${conv.other_user_name}</strong> ${badge}
+                                <div class="message-text">${conv.last_message}</div>
+                                <div class="timestamp">Last: ${conv.last_time}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="result">No conversations found for User ${userId}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('conversationsList').innerHTML = 
+                    `<div class="result error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Load conversation between two users
+        function loadConversation(user1, user2) {
+            document.getElementById('user1_id').value = user1;
+            document.getElementById('user2_id').value = user2;
+            getMessages();
+        }
+        
+        // Test all endpoints
+        async function testAll() {
+            showResult('sendResult', '🔄 Testing all endpoints...', 'success');
+            
+            try {
+                // Test 1: Send message
+                const testMsg = await fetch(`${BASE_URL}/send`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        sender_id: 29,
+                        receiver_id: 28,
+                        message: `Test message at ${new Date().toLocaleTimeString()}`
+                    })
+                });
+                
+                // Test 2: Get conversation
+                const testConv = await fetch(`${BASE_URL}/between/29/28`);
+                
+                // Test 3: Get conversations
+                const testCons = await fetch(`${BASE_URL}/conversations/28`);
+                
+                showResult('sendResult', 
+                    '✅ All tests completed!<br>' +
+                    '1. Send message: ✓<br>' +
+                    '2. Get conversation: ✓<br>' +
+                    '3. Get conversations: ✓<br>' +
+                    'Check the other sections for results.', 
+                    'success'
+                );
+                
+                // Refresh displays
+                getMessages();
+                getConversations();
+                
+            } catch (error) {
+                showResult('sendResult', `❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Clear all results
+        function clearResults() {
+            document.getElementById('sendResult').innerHTML = '';
+            document.getElementById('messagesContainer').innerHTML = '';
+            document.getElementById('conversationsList').innerHTML = '';
+        }
+        
+        // Helper to show results
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+        }
+        
+        // Initialize with sample data
+        window.onload = function() {
+            // Auto-load conversation between 29 and 28
+            setTimeout(() => {
+                getMessages();
+                getConversations();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

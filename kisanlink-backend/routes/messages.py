@@ -1,18 +1,9 @@
-# routes/messages.py - UPDATED WITH FARMER CONVERSATIONS
 from flask import Blueprint, request, jsonify, session
 from extensions import db
-from datetime import datetime
-from models_user import User  # Make sure this import is correct
+from models_user import User
+from models_message import Message
 
 messages_bp = Blueprint("messages", __name__)
-
-class Message(db.Model):
-    __tablename__ = "messages"
-    id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer, nullable=False)
-    receiver_id = db.Column(db.Integer, nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Get messages between logged-in user and another user
 @messages_bp.route("/<int:other_id>", methods=["GET"])
@@ -40,7 +31,7 @@ def get_messages(other_id):
         ]
     })
 
-# Send a message to another user
+# Send a message
 @messages_bp.route("/<int:other_id>", methods=["POST"])
 def send_message(other_id):
     if "user_id" not in session:
@@ -53,11 +44,7 @@ def send_message(other_id):
     if not text:
         return jsonify({"status": "error", "message": "Message empty"}), 400
 
-    msg = Message(
-        sender_id=user_id,
-        receiver_id=other_id,
-        message=text
-    )
+    msg = Message(sender_id=user_id, receiver_id=other_id, message=text)
     db.session.add(msg)
     db.session.commit()
 
@@ -72,127 +59,66 @@ def send_message(other_id):
         }
     })
 
-# List all conversations for CONSUMER (with farmers)
-@messages_bp.route("/conversations", methods=["GET"])
-def get_conversations():
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
-    
-    try:
-        # Get all messages where user is sender or receiver
-        all_messages = Message.query.filter(
-            (Message.sender_id == user_id) | (Message.receiver_id == user_id)
-        ).order_by(Message.created_at.desc()).all()
-        
-        # Create a dictionary to store latest message per farmer
-        conversations_dict = {}
-        
-        for msg in all_messages:
-            # Determine who the other person is
-            if msg.sender_id == user_id:
-                other_id = msg.receiver_id
-            else:
-                other_id = msg.sender_id
-            
-            # Only add if not already in dict (to get the latest message)
-            if other_id not in conversations_dict:
-                # Get farmer details
-                farmer = User.query.filter_by(id=other_id).first()
-                
-                if farmer and farmer.user_type == 'farmer':  # Only show farmers
-                    conversations_dict[other_id] = {
-                        "farmer_id": farmer.id,
-                        "farmer_name": farmer.fullname,
-                        "last_message": msg.message,
-                        "last_msg_time": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    }
-        
-        # Convert dict to list and sort by time
-        conversations = list(conversations_dict.values())
-        conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
-        
-        return jsonify({
-            "status": "success", 
-            "conversations": conversations,
-            "debug": f"Found {len(conversations)} conversations"
-        })
-        
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error in get_conversations: {error_details}")
-        return jsonify({
-            "status": "error", 
-            "message": str(e)
-        }), 500
-
-# NEW: List all conversations for FARMER (with consumers)
+# List all conversations for FARMER (with consumers)
 @messages_bp.route("/farmer-conversations", methods=["GET"])
 def get_farmer_conversations():
-    """Get all conversations for farmer (with consumers)"""
     if "user_id" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
 
     user_id = session["user_id"]
-    
-    try:
-        # Get all messages where farmer is sender or receiver
-        all_messages = Message.query.filter(
-            (Message.sender_id == user_id) | (Message.receiver_id == user_id)
-        ).order_by(Message.created_at.desc()).all()
-        
-        # Create a dictionary to store latest message per consumer
-        conversations_dict = {}
-        
-        for msg in all_messages:
-            # Determine who the other person is
-            if msg.sender_id == user_id:
-                other_id = msg.receiver_id
-            else:
-                other_id = msg.sender_id
-            
-            # Only add if not already in dict (to get the latest message)
+
+    all_messages = Message.query.filter(
+        (Message.sender_id == user_id) | (Message.receiver_id == user_id)
+    ).order_by(Message.created_at.desc()).all()
+
+    conversations_dict = {}
+    for msg in all_messages:
+        other_id = msg.receiver_id if msg.sender_id == user_id else msg.sender_id
+        if other_id not in conversations_dict:
+            consumer = User.query.filter_by(id=other_id).first()
+            if consumer and consumer.user_type == "consumer":
+                conversations_dict[other_id] = {
+                    "consumer_id": consumer.id,
+                    "consumer_name": consumer.fullname,
+                    "consumer_email": consumer.email,
+                    "last_message": msg.message,
+                    "last_msg_time": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
+
+    conversations = list(conversations_dict.values())
+    conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
+
+    return jsonify({"status": "success", "conversations": conversations})
+
+# List all conversations for CONSUMER
+@messages_bp.route("/conversations", methods=["GET"])
+def get_consumer_conversations():
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    user_id = session["user_id"]
+
+    all_messages = Message.query.filter(
+        (Message.sender_id == user_id) | (Message.receiver_id == user_id)
+    ).order_by(Message.created_at.desc()).all()
+
+    conversations_dict = {}
+    for msg in all_messages:
+        other_id = msg.receiver_id if msg.sender_id == user_id else msg.sender_id
+        other_user = User.query.filter_by(id=other_id).first()
+        if other_user and other_user.user_type == "farmer":
+            # Only show farmer in consumer's list
             if other_id not in conversations_dict:
-                # Get consumer details
-                consumer = User.query.filter_by(id=other_id).first()
-                
-                if consumer and consumer.user_type == 'consumer':  # Only show consumers
-                    conversations_dict[other_id] = {
-                        "consumer_id": consumer.id,
-                        "consumer_name": consumer.fullname,
-                        "consumer_email": consumer.email,
-                        "last_message": msg.message,
-                        "last_msg_time": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                    }
-        
-        # Convert dict to list and sort by time
-        conversations = list(conversations_dict.values())
-        conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
-        
-        return jsonify({
-            "status": "success", 
-            "conversations": conversations,
-            "count": len(conversations)
-        })
-        
-    except Exception as e:
-        print(f"Error in get_farmer_conversations: {str(e)}")
-        return jsonify({
-            "status": "error", 
-            "message": str(e)
-        }), 500
+                conversations_dict[other_id] = {
+                    "farmer_id": other_user.id,
+                    "farmer_name": other_user.fullname,
+                    "farmer_email": other_user.email,
+                    "last_message": msg.message,
+                    "last_msg_time": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
 
-# Test endpoints
-@messages_bp.route("/test", methods=["GET"])
-def test_endpoint():
-    return jsonify({
-        "status": "success", 
-        "message": "Messages endpoint is working",
-        "session_user": session.get("user_id", "No user in session")
-    })
+    conversations = list(conversations_dict.values())
+    conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
 
-@messages_bp.route("/health", methods=["GET"])
-def health_check():
-    return jsonify({"status": "healthy", "service": "messages"})
+    return jsonify({"status": "success", "conversations": conversations})
+
