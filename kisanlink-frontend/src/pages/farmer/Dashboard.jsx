@@ -1,20 +1,19 @@
-// src/pages/farmer/Dashboard.jsx - FIXED WITH PROPER ROUTING
+// src/pages/farmer/Dashboard.jsx - UPDATED (Fetch real product count from database)
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
-  Package, Users, ShoppingCart, Clock, AlertCircle
+  Package, ShoppingCart, Clock
 } from "lucide-react";
 
 const FarmerDashboard = () => {
   const [user, setUser] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [recentOrders, setRecentOrders] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
   const [stats, setStats] = useState({
     totalProducts: 0,
     totalOrders: 0,
-    activeCustomers: 0,
     pendingNotifications: 0
   });
   const [unreadCounts, setUnreadCounts] = useState({
@@ -68,7 +67,7 @@ const FarmerDashboard = () => {
         const notifs = data.notifications || [];
         setNotifications(notifs);
 
-        const unread = notifs.filter(n => !n.read).length;
+        const unread = notifs.filter(n => !n.is_read).length;
         setUnreadCounts(prev => ({ ...prev, notifications: unread }));
         setStats(prev => ({ ...prev, pendingNotifications: unread }));
       }
@@ -88,8 +87,14 @@ const FarmerDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         if (data.status === "success") {
-          setMessages(data.conversations || []);
-          const unreadCount = data.conversations.length;
+          const conversations = data.conversations || [];
+          setMessages(conversations);
+          
+          // Count unread messages
+          const unreadCount = conversations.reduce((count, conv) => {
+            return count + (conv.unread_count || 0);
+          }, 0);
+          
           setUnreadCounts(prev => ({ ...prev, messages: unreadCount }));
         }
       }
@@ -103,36 +108,63 @@ const FarmerDashboard = () => {
     if (!user) return;
 
     try {
+      // Fetch products count from farmer_items table for this farmer
       const productsRes = await fetch("http://localhost:5001/farmer/products", {
         credentials: "include",
       });
+      
       if (productsRes.ok) {
         const productsData = await productsRes.json();
+        const productCount = productsData.products?.length || 0;
+        console.log(`Farmer ${user.id} has ${productCount} products`);
+        
         setStats(prev => ({
           ...prev,
-          totalProducts: productsData.products?.length || 0
+          totalProducts: productCount
         }));
+      } else {
+        console.error("Failed to fetch products:", productsRes.status);
       }
 
-      const ordersRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/count`, {
-        credentials: "include",
-      });
-      if (ordersRes.ok) {
-        const ordersData = await ordersRes.json();
+      // Fetch orders count - similar to report.jsx logic
+      try {
+        // First try the orders endpoint from report.jsx
+        const ordersRes = await fetch(`http://localhost:5001/api/farmer/report/${user.id}`, {
+          credentials: "include",
+        });
+        
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          const orderCount = ordersData.summary?.totalOrders || 0;
+          console.log(`Orders from report API: ${orderCount}`);
+          
+          setStats(prev => ({
+            ...prev,
+            totalOrders: orderCount
+          }));
+        } else {
+          // Fallback to orders count endpoint
+          const fallbackRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/count`, {
+            credentials: "include",
+          });
+          
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            const fallbackCount = fallbackData.count || 0;
+            console.log(`Orders from fallback API: ${fallbackCount}`);
+            
+            setStats(prev => ({
+              ...prev,
+              totalOrders: fallbackCount
+            }));
+          }
+        }
+      } catch (orderErr) {
+        console.error("Error fetching orders:", orderErr);
+        // Set default if API fails
         setStats(prev => ({
           ...prev,
-          totalOrders: ordersData.count || 0
-        }));
-      }
-
-      const customersRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/customers`, {
-        credentials: "include",
-      });
-      if (customersRes.ok) {
-        const customersData = await customersRes.json();
-        setStats(prev => ({
-          ...prev,
-          activeCustomers: customersData.count || 0
+          totalOrders: 0
         }));
       }
 
@@ -141,29 +173,44 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch recent orders
-  const fetchRecentOrders = async () => {
+  // Fetch recent activities (get 3 latest notifications)
+  const fetchRecentActivities = async () => {
     try {
       const res = await fetch("http://localhost:5001/notifications", {
         method: "GET",
         credentials: "include",
       });
+      
       if (res.ok) {
         const data = await res.json();
-        const recentNotifs = data.notifications.map((notif, idx) => ({
-          id: notif.id || idx + 1,
-          type: "order",
-          message: notif.message,
-          time: formatTimeAgo(notif.created_at),
-          status: getStatusFromMessage(notif.message),
-          priority: "medium"
-        }));
-        setRecentOrders(recentNotifs);
+        const notifs = data.notifications || [];
+        
+        // Take only 3 most recent notifications
+        const recentActivitiesData = notifs
+          .slice(0, 3) // Get first 3
+          .map((notif, idx) => ({
+            id: notif.id || idx + 1,
+            type: getActivityType(notif),
+            message: notif.message,
+            time: formatTimeAgo(notif.created_at),
+            status: getStatusFromMessage(notif.message),
+            priority: notif.is_read ? "low" : "high"
+          }));
+        
+        setRecentActivities(recentActivitiesData);
       }
     } catch (err) {
-      console.error("Error fetching recent orders:", err);
-      setRecentOrders([]);
+      console.error("Error fetching recent activities:", err);
+      setRecentActivities([]);
     }
+  };
+
+  // Helper: Determine activity type from notification
+  const getActivityType = (notification) => {
+    if (notification.order_id) return "order";
+    if (notification.farmer_id) return "message";
+    if (notification.message?.toLowerCase().includes('product')) return "product";
+    return "system";
   };
 
   // Helper function to get status from message
@@ -186,6 +233,7 @@ const FarmerDashboard = () => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
@@ -198,8 +246,15 @@ const FarmerDashboard = () => {
     fetchNotifications();
     fetchMessages();
     fetchStats();
-    fetchRecentOrders();
+    fetchRecentActivities();
   }, []);
+
+  // Update stats when user data is loaded
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+    }
+  }, [user]);
 
   // Real-time polling
   useEffect(() => {
@@ -208,7 +263,7 @@ const FarmerDashboard = () => {
         fetchNotifications();
         fetchMessages();
         fetchStats();
-        fetchRecentOrders();
+        fetchRecentActivities();
       }
     }, POLL_INTERVAL);
 
@@ -227,7 +282,7 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Sidebar navigation items - ALL as Links
+  // Sidebar navigation items
   const navItems = [
     { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
     { id: "addProduct", label: "Add Product", path: "/farmer/add-product" },
@@ -271,7 +326,7 @@ const FarmerDashboard = () => {
             Messages
             {unreadCounts.messages > 0 && (
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                {unreadCounts.messages}
+                {unreadCounts.messages > 99 ? '99+' : unreadCounts.messages}
               </span>
             )}
           </Link>
@@ -296,7 +351,7 @@ const FarmerDashboard = () => {
               <Bell className="w-6 h-6 text-green-600" />
               {unreadCounts.notifications > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.notifications}
+                  {unreadCounts.notifications > 99 ? '99+' : unreadCounts.notifications}
                 </span>
               )}
             </Link>
@@ -310,7 +365,7 @@ const FarmerDashboard = () => {
               <MessageCircle className="w-6 h-6 text-green-600" />
               {unreadCounts.messages > 0 && (
                 <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.messages}
+                  {unreadCounts.messages > 99 ? '99+' : unreadCounts.messages}
                 </span>
               )}
             </Link>
@@ -328,7 +383,6 @@ const FarmerDashboard = () => {
         {/* Render Dashboard content OR nested routes */}
         {activeTab === "dashboard" && user ? (
           <div className="space-y-8">
-            {/* Dashboard Content - SAME AS BEFORE */}
             {/* Farmer Info Card */}
             <div className="bg-white p-6 rounded-2xl shadow mb-8 flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-4">
@@ -349,7 +403,7 @@ const FarmerDashboard = () => {
               </div>
               <div className="flex items-center space-x-3 mt-4 md:mt-0">
                 <Link
-                  to="/farmer/addproduct"
+                  to="/farmer/add-product"
                   className="flex items-center space-x-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
                 >
                   <Package size={16} />
@@ -365,8 +419,8 @@ const FarmerDashboard = () => {
               </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Stats Grid - Only 3 cards (removed Customers card) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
                 <div className="flex items-center justify-between mb-3">
                   <Package className="w-8 h-8 text-green-600" />
@@ -387,15 +441,6 @@ const FarmerDashboard = () => {
 
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
                 <div className="flex items-center justify-between mb-3">
-                  <Users className="w-8 h-8 text-purple-600" />
-                  <span className="text-sm text-gray-500">Active Customers</span>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800">{stats.activeCustomers}</h3>
-                <p className="text-sm text-gray-600 mt-1">Customers who ordered</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
-                <div className="flex items-center justify-between mb-3">
                   <Bell className="w-8 h-8 text-yellow-600" />
                   <span className="text-sm text-gray-500">Pending Alerts</span>
                 </div>
@@ -404,112 +449,92 @@ const FarmerDashboard = () => {
               </div>
             </div>
 
-            {/* Recent Activities & Quick Stats */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Recent Activities */}
-              <div className="lg:col-span-2 bg-white rounded-2xl shadow p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">Recent Activities</h2>
-                  <span className="text-sm text-green-600 font-medium">Updated just now</span>
-                </div>
-
-                <div className="space-y-4">
-                  {recentOrders.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">No recent activities</p>
-                  ) : (
-                    recentOrders.map((activity) => (
-                      <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-3 h-3 rounded-full ${activity.status === 'delivered' ? 'bg-green-500' :
-                            activity.status === 'processing' ? 'bg-yellow-500' :
-                              activity.status === 'cancelled' ? 'bg-red-500' :
-                                'bg-blue-500'
-                            }`}></div>
-                          <div>
-                            <h4 className="font-semibold text-gray-800">{activity.message}</h4>
-                            <p className="text-sm text-gray-600 capitalize">{activity.type}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Clock className="w-3 h-3 mr-1" />
-                            <span>{activity.time}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+            {/* Recent Activities - Shows 3 latest notifications */}
+            <div className="bg-white rounded-2xl shadow p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-800">Recent Activities</h2>
+                <span className="text-sm text-green-600 font-medium">Showing 3 latest</span>
               </div>
 
-              {/* Quick Stats & Alerts */}
-              <div className="space-y-6">
-                {/* Quick Stats */}
-                <div className="bg-white rounded-2xl shadow p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Stats</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Avg. Order Value</span>
-                      <span className="font-semibold">Rs {stats.totalOrders > 0 ? (850).toFixed(0) : 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Order Completion</span>
-                      <span className="font-semibold">92%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Customer Satisfaction</span>
-                      <span className="font-semibold">4.8/5</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Response Rate</span>
-                      <span className="font-semibold">98%</span>
-                    </div>
+              <div className="space-y-4">
+                {recentActivities.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-4xl mb-4">📋</div>
+                    <p className="text-gray-500">No recent activities yet</p>
+                    <p className="text-sm text-gray-400 mt-2">Your activities will appear here</p>
                   </div>
-                </div>
-
-                {/* Recent Alerts */}
-                <div className="bg-white rounded-2xl shadow p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Alerts</h3>
-                  <div className="space-y-3">
-                    {notifications.slice(0, 3).map((notif, idx) => (
-                      <div key={idx} className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                        <div>
-                          <p className="text-sm text-gray-800">{notif.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{formatTimeAgo(notif.created_at)}</p>
+                ) : (
+                  recentActivities.map((activity) => (
+                    <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          activity.type === 'order' ? 'bg-blue-100' :
+                          activity.type === 'message' ? 'bg-green-100' :
+                          activity.type === 'product' ? 'bg-yellow-100' :
+                          'bg-gray-100'
+                        }`}>
+                          <span className={`text-sm ${
+                            activity.type === 'order' ? 'text-blue-600' :
+                            activity.type === 'message' ? 'text-green-600' :
+                            activity.type === 'product' ? 'text-yellow-600' :
+                            'text-gray-600'
+                          }`}>
+                            {activity.type === 'order' ? '📦' :
+                             activity.type === 'message' ? '💬' :
+                             activity.type === 'product' ? '📝' : '🔔'}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-800">{activity.message}</h4>
+                          <div className="flex items-center mt-1">
+                            <span className="text-xs px-2 py-1 rounded-full capitalize bg-gray-200 text-gray-700">
+                              {activity.type}
+                            </span>
+                            {activity.priority === 'high' && (
+                              <span className="ml-2 text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+                                New
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                    {notifications.length === 0 && (
-                      <p className="text-gray-500 text-sm">No recent alerts</p>
-                    )}
-                  </div>
-                </div>
+                      <div className="text-right">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <Clock className="w-3 h-3 mr-1" />
+                          <span>{activity.time}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-                {/* Quick Actions */}
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-green-800 mb-4">Quick Actions</h3>
-                  <div className="space-y-2">
-                    <Link
-                      to="/farmer/addproduct"
-                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition block text-center"
-                    >
-                      Add New Product
-                    </Link>
-                    <Link
-                      to="/farmer/messages"
-                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition block text-center"
-                    >
-                      Check Messages
-                    </Link>
-                    <Link
-                      to="/farmer/reports"
-                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition block text-center"
-                    >
-                      View Reports
-                    </Link>
-                  </div>
-                </div>
+            {/* Quick Actions - Simplified */}
+            <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-green-800 mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Link
+                  to="/farmer/add-product"
+                  className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex flex-col items-center justify-center text-center"
+                >
+                  <Package className="w-6 h-6 mb-2" />
+                  <span className="font-medium">Add New Product</span>
+                </Link>
+                <Link
+                  to="/farmer/messages"
+                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
+                >
+                  <MessageCircle className="w-6 h-6 mb-2" />
+                  <span className="font-medium">Check Messages</span>
+                </Link>
+                <Link
+                  to="/farmer/report"
+                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
+                >
+                  <Bell className="w-6 h-6 mb-2" />
+                  <span className="font-medium">View Reports</span>
+                </Link>
               </div>
             </div>
           </div>
