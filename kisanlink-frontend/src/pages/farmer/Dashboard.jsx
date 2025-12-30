@@ -1,9 +1,6 @@
-// src/pages/farmer/Dashboard.jsx - UPDATED WITH PROPER ROUTING
+// src/pages/farmer/Dashboard.jsx - FIXED WITH PROPER ROUTING
 import React, { useEffect, useState } from "react";
-import AddProduct from "./AddProduct";
-import ProductList from "./ProductList";
-import Report from "./Report";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
   Package, Users, ShoppingCart, Clock, AlertCircle
@@ -11,7 +8,6 @@ import {
 
 const FarmerDashboard = () => {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("dashboard");
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -27,6 +23,19 @@ const FarmerDashboard = () => {
   });
 
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get current active tab from URL
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.includes('/farmer/add-product')) return 'addProduct';
+    if (path.includes('/farmer/products')) return 'productList';
+    if (path.includes('/farmer/report')) return 'reports';
+    if (path.includes('/farmer/notifications')) return 'notifications';
+    return 'dashboard'; // default
+  };
+
+  const activeTab = getActiveTab();
 
   // Real-time polling interval (10 seconds)
   const POLL_INTERVAL = 10000;
@@ -34,7 +43,6 @@ const FarmerDashboard = () => {
   // Fetch all farmer data
   const fetchFarmerData = async () => {
     try {
-      // Fetch farmer info
       const res = await fetch("http://localhost:5001/farmer/me", {
         method: "GET",
         credentials: "include",
@@ -60,7 +68,6 @@ const FarmerDashboard = () => {
         const notifs = data.notifications || [];
         setNotifications(notifs);
 
-        // Count unread notifications
         const unread = notifs.filter(n => !n.read).length;
         setUnreadCounts(prev => ({ ...prev, notifications: unread }));
         setStats(prev => ({ ...prev, pendingNotifications: unread }));
@@ -80,31 +87,22 @@ const FarmerDashboard = () => {
 
       if (res.ok) {
         const data = await res.json();
-
         if (data.status === "success") {
           setMessages(data.conversations || []);
           const unreadCount = data.conversations.length;
           setUnreadCounts(prev => ({ ...prev, messages: unreadCount }));
-        } else {
-          console.log("Messages endpoint returned:", data.status, data.message);
-          setMessages([]);
         }
-      } else {
-        console.log("Messages endpoint returned:", res.status);
-        setMessages([]);
       }
     } catch (err) {
       console.error("Error fetching messages:", err);
-      setMessages([]);
     }
   };
 
-  // Fetch farmer statistics from database
+  // Fetch farmer statistics
   const fetchStats = async () => {
     if (!user) return;
 
     try {
-      // Fetch products count from farmer_items table
       const productsRes = await fetch("http://localhost:5001/farmer/products", {
         credentials: "include",
       });
@@ -116,7 +114,6 @@ const FarmerDashboard = () => {
         }));
       }
 
-      // Fetch total orders count from orders table
       const ordersRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/count`, {
         credentials: "include",
       });
@@ -128,7 +125,6 @@ const FarmerDashboard = () => {
         }));
       }
 
-      // Fetch unique customers count from orders
       const customersRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/customers`, {
         credentials: "include",
       });
@@ -145,7 +141,7 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch recent notifications as "recent orders" from notifications table
+  // Fetch recent orders
   const fetchRecentOrders = async () => {
     try {
       const res = await fetch("http://localhost:5001/notifications", {
@@ -231,14 +227,13 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Dashboard tabs only - REMOVE messages from here
-  const tabs = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "addProduct", label: "Add Product" },
-    { id: "productList", label: "Product List" },
-    { id: "reports", label: "Reports" },
-    { id: "notifications", label: `Notifications (${unreadCounts.notifications})` },
-    // REMOVED: { id: "messages", label: `Messages (${unreadCounts.messages})` },
+  // Sidebar navigation items - ALL as Links
+  const navItems = [
+    { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
+    { id: "addProduct", label: "Add Product", path: "/farmer/add-product" },
+    { id: "productList", label: "Product List", path: "/farmer/products" },
+    { id: "reports", label: "Reports", path: "/farmer/report" },
+    { id: "notifications", label: `Notifications (${unreadCounts.notifications})`, path: "/farmer/notifications" },
   ];
 
   return (
@@ -254,20 +249,21 @@ const FarmerDashboard = () => {
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === tab.id
-                ? "bg-green-600 text-white shadow-md"
-                : "text-gray-700 hover:bg-green-100"
-                }`}
-              onClick={() => setActiveTab(tab.id)}
+          {navItems.map((item) => (
+            <Link
+              key={item.id}
+              to={item.path}
+              className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${
+                activeTab === item.id
+                  ? "bg-green-600 text-white shadow-md"
+                  : "text-gray-700 hover:bg-green-100"
+              }`}
             >
-              {tab.label}
-            </button>
+              {item.label}
+            </Link>
           ))}
           
-          {/* SEPARATE LINK FOR MESSAGES - Navigates to /farmer/messages */}
+          {/* Messages as separate Link */}
           <Link
             to="/farmer/messages"
             className="block w-full text-left px-4 py-2 rounded-lg font-semibold transition text-gray-700 hover:bg-green-100 relative"
@@ -282,21 +278,19 @@ const FarmerDashboard = () => {
         </nav>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content - Use Outlet for nested routes */}
       <main className="flex-1 p-8 overflow-y-auto">
-        {/* Top Bar: Welcome left, Logout + Icons right */}
+        {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
-          {/* Welcome */}
           <h1 className="text-3xl font-bold text-green-700">
             Welcome, {user?.fullname}!
           </h1>
 
-          {/* Right Side: Real-time indicators */}
           <div className="flex items-center space-x-4">
-            {/* Notifications - stays in dashboard */}
-            <button
+            {/* Notifications - Link */}
+            <Link
+              to="/farmer/notifications"
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              onClick={() => setActiveTab("notifications")}
               title={`${unreadCounts.notifications} unread notifications`}
             >
               <Bell className="w-6 h-6 text-green-600" />
@@ -305,12 +299,12 @@ const FarmerDashboard = () => {
                   {unreadCounts.notifications}
                 </span>
               )}
-            </button>
+            </Link>
 
-            {/* Messages - Navigates to /farmer/messages */}
-            <button
+            {/* Messages - Link */}
+            <Link
+              to="/farmer/messages"
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              onClick={() => navigate("/farmer/messages")}
               title={`${unreadCounts.messages} unread messages`}
             >
               <MessageCircle className="w-6 h-6 text-green-600" />
@@ -319,7 +313,7 @@ const FarmerDashboard = () => {
                   {unreadCounts.messages}
                 </span>
               )}
-            </button>
+            </Link>
 
             {/* Logout */}
             <button
@@ -331,9 +325,10 @@ const FarmerDashboard = () => {
           </div>
         </div>
 
-        {/* Dashboard Tab */}
-        {activeTab === "dashboard" && user && (
+        {/* Render Dashboard content OR nested routes */}
+        {activeTab === "dashboard" && user ? (
           <div className="space-y-8">
+            {/* Dashboard Content - SAME AS BEFORE */}
             {/* Farmer Info Card */}
             <div className="bg-white p-6 rounded-2xl shadow mb-8 flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-4">
@@ -353,13 +348,13 @@ const FarmerDashboard = () => {
                 </div>
               </div>
               <div className="flex items-center space-x-3 mt-4 md:mt-0">
-                <button
-                  onClick={() => setActiveTab("addProduct")}
+                <Link
+                  to="/farmer/addproduct"
                   className="flex items-center space-x-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
                 >
                   <Package size={16} />
                   <span>Add Product</span>
-                </button>
+                </Link>
                 <button
                   onClick={() => window.alert("Edit profile feature coming soon!")}
                   className="flex items-center space-x-1 bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 transition"
@@ -409,9 +404,9 @@ const FarmerDashboard = () => {
               </div>
             </div>
 
-            {/* Two Column Layout: Recent Orders & Quick Stats */}
+            {/* Recent Activities & Quick Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Recent Activities - Takes 2/3 width */}
+              {/* Recent Activities */}
               <div className="lg:col-span-2 bg-white rounded-2xl shadow p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-bold text-gray-800">Recent Activities</h2>
@@ -447,7 +442,7 @@ const FarmerDashboard = () => {
                 </div>
               </div>
 
-              {/* Quick Stats & Alerts - Takes 1/3 width */}
+              {/* Quick Stats & Alerts */}
               <div className="space-y-6">
                 {/* Quick Stats */}
                 <div className="bg-white rounded-2xl shadow p-6">
@@ -495,64 +490,33 @@ const FarmerDashboard = () => {
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-green-800 mb-4">Quick Actions</h3>
                   <div className="space-y-2">
-                    <button
-                      onClick={() => setActiveTab("addProduct")}
-                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
+                    <Link
+                      to="/farmer/addproduct"
+                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition block text-center"
                     >
                       Add New Product
-                    </button>
-                    <button
-                      onClick={() => navigate("/farmer/messages")}
-                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition"
+                    </Link>
+                    <Link
+                      to="/farmer/messages"
+                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition block text-center"
                     >
                       Check Messages
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("reports")}
-                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition"
+                    </Link>
+                    <Link
+                      to="/farmer/reports"
+                      className="w-full bg-white text-green-600 border border-green-600 py-2 rounded-lg hover:bg-green-50 transition block text-center"
                     >
                       View Reports
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        ) : (
+          // Render nested routes (AddProduct, ProductList, Reports, etc.)
+          <Outlet />
         )}
-
-        {activeTab === "addProduct" && <AddProduct />}
-        {activeTab === "productList" && <ProductList />}
-        {activeTab === "reports" && user && <Report farmerId={user.id} />}
-
-        {activeTab === "notifications" && (
-          <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="text-2xl font-bold text-green-700 mb-4">Notifications</h2>
-            {notifications.length === 0 ? (
-              <div className="text-center py-8">
-                <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">No notifications yet</p>
-                <p className="text-sm text-gray-400 mt-1">You're all caught up!</p>
-              </div>
-            ) : (
-              notifications.map((n, idx) => (
-                <div key={idx} className="border-b py-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-gray-800">{n.message}</p>
-                      <p className="text-sm text-gray-500 mt-1">{formatTimeAgo(n.created_at)}</p>
-                    </div>
-                    {!n.read && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">New</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* REMOVED the messages tab content since it will be on a separate page */}
-        {/* Messages are now at /farmer/messages route */}
       </main>
     </div>
   );
