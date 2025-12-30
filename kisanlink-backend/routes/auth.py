@@ -1,5 +1,5 @@
 # -----------------------------
-# routes/auth.py
+# routes/auth.py - COMPLETE
 # -----------------------------
 
 from flask import Blueprint, request, jsonify, session  # Flask tools
@@ -168,20 +168,6 @@ def logout_api():
 # -----------------------------
 # GET CURRENT USER API
 # -----------------------------
-# @auth_bp.route('/me', methods=['GET'])
-# def me_api():
-#     """
-#     Returns the current logged-in user
-#     Can be used by frontend to check if user is authenticated
-#     """
-#     if 'user_id' not in session:
-#         return {"authenticated": False}, 401
-
-#     return {
-#         "authenticated": True,
-#         "user_id": session['user_id'],
-#         "user_type": session['user_type']
-#     }
 @auth_bp.route('/me', methods=['GET'])
 def me_api():
     """
@@ -217,3 +203,151 @@ def me_api():
         "latitude": latitude,
         "longitude": longitude
     }
+
+
+# -----------------------------
+# GET USER BY ID API (Public - for chat display)
+# -----------------------------
+@auth_bp.route('/users/<int:user_id>', methods=['GET'])
+def get_user_by_id(user_id):
+    """
+    Get user details by user ID (Public endpoint)
+    Used to get consumer/farmer info for chat display
+    No authentication required for this endpoint
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Fetch user from database
+    cur.execute("""
+        SELECT id, fullname, email, user_type, location, latitude, longitude 
+        FROM users 
+        WHERE id=%s
+    """, (user_id,))
+    
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if not user:
+        return jsonify({
+            "status": "error", 
+            "message": f"User with ID {user_id} not found"
+        }), 404
+    
+    # Return user details
+    return jsonify({
+        "status": "success",
+        "id": user[0],
+        "fullname": user[1],
+        "email": user[2],
+        "user_type": user[3],
+        "location": user[4],
+        "latitude": user[5],
+        "longitude": user[6]
+    })
+
+
+# -----------------------------
+# GET ALL USERS (Optional - for admin)
+# -----------------------------
+@auth_bp.route('/users', methods=['GET'])
+def get_all_users():
+    """
+    Get all users (Optional - for admin purposes)
+    Requires authentication
+    """
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT id, fullname, email, user_type, location 
+        FROM users 
+        ORDER BY id
+    """)
+    
+    users = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    user_list = []
+    for user in users:
+        user_list.append({
+            "id": user[0],
+            "fullname": user[1],
+            "email": user[2],
+            "user_type": user[3],
+            "location": user[4]
+        })
+    
+    return jsonify({
+        "status": "success",
+        "users": user_list,
+        "count": len(user_list)
+    })
+
+
+# -----------------------------
+# UPDATE USER PROFILE
+# -----------------------------
+@auth_bp.route('/update-profile', methods=['PUT'])
+def update_profile():
+    """
+    Update user profile (fullname, location, etc.)
+    """
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    data = request.get_json()
+    fullname = data.get('fullname')
+    location = data.get('location')
+    
+    if not fullname or not location:
+        return jsonify({"status": "error", "message": "Fullname and location are required"}), 400
+    
+    # Get coordinates
+    latitude, longitude = location_coords.get(location, (None, None))
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        UPDATE users 
+        SET fullname = %s, location = %s, latitude = %s, longitude = %s
+        WHERE id = %s
+    """, (fullname, location, latitude, longitude, session['user_id']))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({
+        "status": "success",
+        "message": "Profile updated successfully"
+    })
+
+
+# -----------------------------
+# TEST ENDPOINT
+# -----------------------------
+@auth_bp.route('/test', methods=['GET'])
+def test_auth():
+    """
+    Test endpoint to verify auth routes are working
+    """
+    return jsonify({
+        "status": "success",
+        "message": "Auth endpoints are working",
+        "endpoints": [
+            "/auth/signup (POST)",
+            "/auth/login (POST)", 
+            "/auth/logout (POST)",
+            "/auth/me (GET)",
+            "/auth/users/<id> (GET)",
+            "/auth/users (GET)",
+            "/auth/update-profile (PUT)"
+        ]
+    })

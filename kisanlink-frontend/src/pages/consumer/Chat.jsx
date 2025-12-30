@@ -1,72 +1,95 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-
-const BACKEND_URL = "http://localhost:5001";
+import { useLocation, useNavigate } from "react-router-dom";
+import ChatBox from "../../components/chat/ChatBox";
 
 const Chat = () => {
-  const { farmer_id } = useParams();
-  const [searchParams] = useSearchParams();
-  const order_id = searchParams.get("order_id");
-
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/chat/${farmer_id}?order_id=${order_id}`, {
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (data.status === "success") setMessages(data.messages);
-    } catch (err) {
-      console.error("Failed to fetch chat messages:", err);
-    }
-  };
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [farmerData, setFarmerData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
-  }, [farmer_id, order_id]);
-
-  const sendMessage = async () => {
-    if (!input) return;
-    try {
-      await fetch(`${BACKEND_URL}/chat/${farmer_id}`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input, order_id }),
+    // Get farmer data from location state
+    if (location.state?.farmer_id) {
+      setFarmerData({
+        farmer_id: location.state.farmer_id,
+        farmer_name: location.state.farmer_name || `Farmer ${location.state.farmer_id}`,
+        order_id: location.state.order_id
       });
-      setInput("");
-      fetchMessages();
-    } catch (err) {
-      console.error("Failed to send message:", err);
+      setLoading(false);
+    } else {
+      // If no data, redirect back after 2 seconds
+      const timer = setTimeout(() => {
+        navigate('/consumer/notifications');
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [location.state, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+          <p className="mt-4 text-gray-600">Loading chat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!farmerData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-lg shadow-md">
+          <div className="text-6xl mb-4">💬</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">No Farmer Selected</h2>
+          <p className="text-gray-600 mb-4">Redirecting back to notifications...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-4">Chat with Farmer {farmer_id}</h2>
-      <div className="space-y-2 mb-4 max-h-[60vh] overflow-y-auto">
-        {messages.map((m, idx) => (
-          <div
-            key={idx}
-            className={`p-2 rounded ${m.from === "consumer" ? "bg-blue-100 text-right" : "bg-gray-100 text-left"}`}
-          >
-            {m.message}
+    <div className="min-h-screen bg-gray-50">
+      {/* Header - Fixed at top */}
+      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate(-1)}
+                className="mr-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">
+                  Chat with {farmerData.farmer_name}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Farmer ID: {farmerData.farmer_id}
+                  {farmerData.order_id && ` • Order: #${farmerData.order_id}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/consumer/notifications')}
+              className="text-sm text-green-600 hover:text-green-800"
+            >
+              View Notifications
+            </button>
           </div>
-        ))}
+        </div>
       </div>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 p-2 border rounded"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+
+      {/* Chat Area - Full height minus header */}
+      <div className="max-w-6xl mx-auto h-[calc(100vh-80px)]">
+        <ChatBox 
+          otherId={farmerData.farmer_id} 
+          farmerName={farmerData.farmer_name} 
         />
-        <button className="bg-blue-500 text-white p-2 rounded" onClick={sendMessage}>
-          Send
-        </button>
       </div>
     </div>
   );

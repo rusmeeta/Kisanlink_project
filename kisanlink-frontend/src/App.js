@@ -22,6 +22,7 @@ import Cart from "./pages/consumer/Cart";
 import Messages from "./pages/consumer/Messages";
 import Notifications from "./pages/consumer/Notifications";
 import ConsumerChat from "./pages/consumer/ConsumerChat";
+import ChatWithFarmer from "./pages/consumer/ChatWithFarmer";
 
 // Import ProtectedRoute if you created it
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -98,6 +99,8 @@ function App() {
             <ConsumerChat />
           </ProtectedRoute>
         } />
+
+        <Route path="/consumer/messages/:farmerId" element={<ChatWithFarmer />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

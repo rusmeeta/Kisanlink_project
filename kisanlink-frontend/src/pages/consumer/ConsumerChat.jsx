@@ -1,4 +1,4 @@
-// src/pages/consumer/ConsumerChat.jsx
+// src/pages/consumer/ConsumerChat.jsx - UPDATED
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
@@ -32,18 +32,75 @@ const ConsumerChat = () => {
     return () => clearInterval(interval);
   }, [farmerId]);
 
+  // FETCH FARMER DETAILS - IMPROVED
   const fetchFarmerDetails = async (id) => {
+    console.log(`Fetching details for farmer ID: ${id}`);
+    
+    // Try multiple endpoints to get farmer name
+    const endpoints = [
+      `http://localhost:5001/consumer/farmer-details/${id}`,
+      `http://localhost:5001/auth/users/${id}`,
+      `http://localhost:5001/farmer/me?user_id=${id}`,
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          credentials: "include",
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`Response from ${endpoint}:`, data);
+          
+          if (data.status === "success") {
+            // Handle different response structures
+            const farmerData = data.farmer || data;
+            setFarmerDetails({
+              fullname: farmerData.fullname || `Farmer ${id}`,
+              email: farmerData.email || "",
+              location: farmerData.location || "Unknown location",
+              id: farmerData.id || id
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(`Failed with endpoint ${endpoint}:`, err);
+      }
+    }
+    
+    // Last resort: Try to get name from messages
     try {
-      const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+      const msgResponse = await fetch(`http://localhost:5001/messages/${id}`, {
         credentials: "include",
       });
-      if (response.ok) {
-        const data = await response.json();
-        setFarmerDetails(data);
+      
+      if (msgResponse.ok) {
+        const msgData = await msgResponse.json();
+        if (msgData.status === "success" && msgData.other_user) {
+          setFarmerDetails({
+            fullname: msgData.other_user.fullname || `Farmer ${id}`,
+            email: msgData.other_user.email || "",
+            location: msgData.other_user.location || "Unknown location",
+            id: id
+          });
+          return;
+        }
       }
     } catch (err) {
-      console.error("Failed to fetch farmer details:", err);
+      console.error("Failed to get name from messages:", err);
     }
+    
+    // Ultimate fallback
+    console.log("Using fallback for farmer name");
+    setFarmerDetails({
+      fullname: `Farmer ${id}`,
+      email: "",
+      location: "Unknown location",
+      id: id
+    });
   };
 
   // Fetch messages
@@ -54,10 +111,23 @@ const ConsumerChat = () => {
       const response = await fetch(`${API_BASE_URL}/messages/${farmerId}`, {
         credentials: "include",
       });
+      
       if (response.ok) {
         const data = await response.json();
+        console.log("Messages response:", data); // Debug
+        
         if (data.status === "success") {
           setMessages(data.messages || []);
+          
+          // Also try to get farmer name from messages if we don't have it
+          if (data.other_user && !farmerDetails) {
+            setFarmerDetails({
+              fullname: data.other_user.fullname || `Farmer ${farmerId}`,
+              email: data.other_user.email || "",
+              location: data.other_user.location || "Unknown location",
+              id: farmerId
+            });
+          }
         }
       }
     } catch (err) {
@@ -242,7 +312,9 @@ const ConsumerChat = () => {
     fileInputRef.current?.click();
   };
 
-  const displayName = farmerDetails?.fullname || farmerDetails?.farmer_name || `Farmer ${farmerId}`;
+  // Display name - with fallback
+  const displayName = farmerDetails?.fullname || `Farmer ${farmerId}`;
+  const displayLocation = farmerDetails?.location || "Unknown location";
 
   if (!farmerId) {
     return (
@@ -258,7 +330,7 @@ const ConsumerChat = () => {
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Fixed Header - Doesn't Scroll */}
+      {/* Fixed Header - Shows Farmer Name */}
       <div className="bg-green-600 text-white px-6 py-4 border-b border-green-700 flex-shrink-0">
         <div className="flex items-center">
           <div className="w-12 h-12 rounded-full bg-white text-green-600 flex items-center justify-center font-bold mr-4 flex-shrink-0">
@@ -268,7 +340,7 @@ const ConsumerChat = () => {
             <h1 className="text-xl font-semibold truncate">{displayName}</h1>
             <div className="flex items-center mt-1 text-green-100">
               <span className="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
-              <span className="text-sm">Online • Farmer ID: {farmerId}</span>
+              <span className="text-sm">Online • {displayLocation}</span>
             </div>
           </div>
         </div>
