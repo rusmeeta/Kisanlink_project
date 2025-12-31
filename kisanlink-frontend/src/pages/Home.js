@@ -1,12 +1,95 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Shield } from "lucide-react";
 
 const Home = () => {
+  const navigate = useNavigate();
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminCredentials, setAdminCredentials] = useState({
+    email: "",
+    password: ""
+  });
+  const [adminError, setAdminError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   // Smooth scroll function
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setAdminError("");
+    setLoading(true);
+
+    try {
+      // Call the backend login API
+      const response = await fetch("http://localhost:5001/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: adminCredentials.email,
+          password: adminCredentials.password,
+        }),
+        credentials: "include", // Important for sessions/cookies
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store in localStorage for frontend check
+        localStorage.setItem("adminLoggedIn", "true");
+        localStorage.setItem("adminEmail", adminCredentials.email);
+        localStorage.setItem("adminName", data.user_name || "Admin");
+        
+        // Redirect to admin dashboard
+        navigate("/admin/dashboard");
+        setShowAdminModal(false);
+        setAdminCredentials({ email: "", password: "" });
+      } else {
+        setAdminError(data.error || "Invalid admin credentials");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setAdminError("Server error. Please check if backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setAdminCredentials({
+      ...adminCredentials,
+      [e.target.name]: e.target.value
+    });
+    setAdminError(""); // Clear error when user types
+  };
+
+  // Setup default admin (first time only)
+  const setupDefaultAdmin = async () => {
+    try {
+      const response = await fetch("http://localhost:5001/admin/setup-default-admin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setAdminCredentials({
+          email: "admin@kisanlink.com",
+          password: "admin123"
+        });
+        alert("Default admin created! Use these credentials to login.");
+      }
+    } catch (error) {
+      console.error("Setup error:", error);
     }
   };
 
@@ -53,6 +136,15 @@ const Home = () => {
               </button>
               
               <div className="flex items-center space-x-4">
+                {/* Admin Login Button */}
+                <button
+                  onClick={() => setShowAdminModal(true)}
+                  className="flex items-center px-4 py-2 text-purple-700 hover:text-purple-800 font-medium transition-colors"
+                >
+                  <Shield size={16} className="mr-2" />
+                  Admin
+                </button>
+                
                 <Link
                   to="/login"
                   className="px-4 py-2 text-emerald-700 hover:text-emerald-800 font-medium transition-colors"
@@ -79,6 +171,109 @@ const Home = () => {
           </div>
         </div>
       </nav>
+
+      {/* Admin Login Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center">
+                  <Shield className="h-6 w-6 text-purple-600 mr-3" />
+                  <h3 className="text-xl font-bold text-gray-900">Admin Login</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAdminModal(false);
+                    setAdminError("");
+                    setAdminCredentials({ email: "", password: "" });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Setup Button for First Time */}
+              <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-800 mb-2">
+                  First time? Create default admin account
+                </p>
+                <button
+                  onClick={setupDefaultAdmin}
+                  className="w-full py-2 bg-yellow-100 text-yellow-800 rounded-lg font-medium hover:bg-yellow-200 transition-colors"
+                >
+                  Create Default Admin
+                </button>
+              </div>
+
+              {/* Demo Credentials */}
+              
+
+              <form onSubmit={handleAdminLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Admin Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={adminCredentials.email}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="admin@kisanlink.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Admin Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={adminCredentials.password}
+                    onChange={handleInputChange}
+                    required
+                    placeholder=""
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                  />
+                </div>
+
+                {adminError && (
+                  <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+                    {adminError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                    loading
+                      ? "bg-purple-400 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700"
+                  } text-white`}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Logging in...
+                    </div>
+                  ) : (
+                    "Login as Admin"
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-4 text-center text-sm text-gray-500">
+                <p>For security, admin access is restricted to authorized personnel only.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className="relative py-20 px-4 overflow-hidden">
@@ -276,12 +471,11 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {[
               { name: "Fresh Vegetables", icon: "🥬", color: "bg-emerald-100" },
               { name: "Seasonal Fruits", icon: "🍎", color: "bg-red-100" },
               { name: "Organic Grains", icon: "🌾", color: "bg-amber-100" },
-              { name: "Dairy Products", icon: "🥛", color: "bg-blue-100" },
             ].map((product, index) => (
               <div key={index} className={`${product.color} rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300`}>
                 <div className="text-4xl mb-3">{product.icon}</div>

@@ -13,8 +13,8 @@ import AddProduct from "./pages/farmer/AddProduct";
 import ProductList from "./pages/farmer/ProductList";
 import Report from "./pages/farmer/Report";
 import FarmerMessages from "./pages/farmer/Messages";
-import FarmerNotifications from "./pages/farmer/Notifications"; 
-import FarmerChat from "./pages/farmer/FarmerChat"; // Fixed: Use FarmerChat (not duplicate)
+import FarmerNotifications from "./pages/farmer/Notifications";
+import FarmerChat from "./pages/farmer/FarmerChat";
 
 // Consumer pages
 import ConsumerDashboard from "./pages/consumer/Dashboard";
@@ -24,7 +24,15 @@ import Notifications from "./pages/consumer/Notifications";
 import ConsumerChat from "./pages/consumer/ConsumerChat";
 import ChatWithFarmer from "./pages/consumer/ChatWithFarmer";
 
-// Import ProtectedRoute if you created it
+// ========== ADD THESE ADMIN IMPORTS ==========
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/Dashboard";
+import FarmersManagement from "./pages/admin/FarmersManagement";
+import ProductsManagement from "./pages/admin/ProductsManagement";
+import TestDashboard from "./pages/admin/TestDashboard";
+// =============================================
+
+// Import ProtectedRoute
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -101,6 +109,17 @@ function App() {
         } />
 
         <Route path="/consumer/messages/:farmerId" element={<ChatWithFarmer />} />
+
+        {/* ========== ADD THESE ADMIN ROUTES ========== */}
+        // In App.jsx
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/farmers" element={<FarmersManagement />} />
+        <Route path="/admin/products" element={<ProductsManagement />} />
+        
+
+        <Route path="/admin/dashboard" element={<TestDashboard />} />
+        {/* ============================================ */}
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

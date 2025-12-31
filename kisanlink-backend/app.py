@@ -18,6 +18,7 @@ from routes.notifications import notifications_bp
 from routes.messages import messages_bp
 from routes.simple_messages import simple_bp
 
+from routes.admin import admin_bp
 # ------------------------------
 # Initialize Flask app
 # ------------------------------
@@ -63,6 +64,8 @@ app.register_blueprint(notifications_bp, url_prefix="/notifications")
 app.register_blueprint(messages_bp, url_prefix="/messages")
 
 app.register_blueprint(simple_bp, url_prefix="/simple")
+
+app.register_blueprint(admin_bp, url_prefix="/admin") 
 
 
 # ------------------------------

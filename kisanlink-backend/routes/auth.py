@@ -1,22 +1,20 @@
 # -----------------------------
-# routes/auth.py - COMPLETE
+# routes/auth.py - COMPLETE (SECURE VERSION)
 # -----------------------------
 
-from flask import Blueprint, request, jsonify, session  # Flask tools
-from db import get_db_connection  # Function to connect to PostgreSQL
-from datetime import datetime      # For timestamps (if needed)
+from flask import Blueprint, request, jsonify, session
+from db import get_db_connection
+import re
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # -----------------------------
 # Create Blueprint
 # -----------------------------
-# Blueprint groups all auth-related routes under /auth prefix
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 # -----------------------------
 # Predefined location coordinates
 # -----------------------------
-# Each location maps to a latitude & longitude
-# This allows automatic geolocation for users on signup
 location_coords = {
     "Naya Thimi": (27.6943, 85.3347),
     "Gatthaghar": (27.6739136, 85.3739132),
@@ -25,217 +23,188 @@ location_coords = {
 }
 
 # -----------------------------
+# Validators
+# -----------------------------
+def is_valid_email(email):
+    pattern = r"^[a-zA-Z0-9._%+-]{3,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return re.match(pattern, email)
+
+
+def is_strong_password(password):
+    pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$"
+    return re.match(pattern, password)
+
+# -----------------------------
 # SIGNUP API
 # -----------------------------
-@auth_bp.route('/signup', methods=['POST'])
+@auth_bp.route("/signup", methods=["POST"])
 def signup_api():
-    """
-    Signup new users (farmer, consumer, admin)
-    1. Validates input fields
-    2. Automatically sets latitude & longitude
-    3. Inserts into 'users' table
-    """
-    data = request.get_json()  # Get JSON payload from frontend
+    data = request.get_json()
 
-    # Extract fields
-    fullname = data.get('fullname')
-    email = data.get('email')
-    password = data.get('password')
-    location = data.get('location')
-    user_type = data.get('user_type')  # farmer/consumer/admin
+    fullname = data.get("fullname")
+    email = data.get("email")
+    password = data.get("password")
+    location = data.get("location")
+    user_type = data.get("user_type")
 
-    # -----------------------------
     # Validate input
-    # -----------------------------
     if not all([fullname, email, password, location, user_type]):
         return jsonify({"status": "error", "message": "All fields are required"}), 400
 
-    # -----------------------------
-    # Get latitude & longitude
-    # -----------------------------
+    # Email validation
+    if not is_valid_email(email):
+        return jsonify({
+            "status": "error",
+            "message": "Invalid email format"
+        }), 400
+
+    # Password validation
+    if not is_strong_password(password):
+        return jsonify({
+            "status": "error",
+            "message": "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
+        }), 400
+
     latitude, longitude = location_coords.get(location, (None, None))
 
-    # -----------------------------
-    # Connect to database
-    # -----------------------------
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # -----------------------------
-    # Check if email already exists
-    # -----------------------------
-    cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+    # Check duplicate email
+    cur.execute("SELECT id FROM users WHERE email=%s", (email,))
     if cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"status": "error", "message": "Email already exists"}), 400
 
-    # -----------------------------
-    # Insert user into database
-    # -----------------------------
+    # Hash password
+    hashed_password = generate_password_hash(password)
+
+    # Insert user
     cur.execute("""
         INSERT INTO users (fullname, email, password_hash, location, user_type, latitude, longitude)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id
-    """, (fullname, email, password, location, user_type, latitude, longitude))
+    """, (fullname, email, hashed_password, location, user_type, latitude, longitude))
 
-    user_id = cur.fetchone()[0]  # Get the newly inserted user's ID
-
-    conn.commit()   # Save changes
+    user_id = cur.fetchone()[0]
+    conn.commit()
     cur.close()
-    conn.close()    # Close connection
+    conn.close()
 
-    # -----------------------------
-    # Return response
-    # -----------------------------
-    return jsonify({"status": "success", "message": "Signup successful", "user_id": user_id}), 201
-
+    return jsonify({
+        "status": "success",
+        "message": "Signup successful",
+        "user_id": user_id
+    }), 201
 
 # -----------------------------
 # LOGIN API
 # -----------------------------
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route("/login", methods=["POST"])
 def login_api():
-    """
-    Login user
-    1. Checks email and password
-    2. Sets Flask session
-    3. Returns user info including user_type for frontend redirect
-    """
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
+    email = data.get("email")
+    password = data.get("password")
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # -----------------------------
-    # Fetch user from DB
-    # -----------------------------
     cur.execute(
         "SELECT id, password_hash, user_type, fullname FROM users WHERE email=%s",
         (email,)
     )
     user = cur.fetchone()
+
     if not user:
         cur.close()
         conn.close()
-        return {"status": "error", "message": "Email not found"}, 404
+        return jsonify({"status": "error", "message": "Email not found"}), 404
 
     user_id, db_password, user_type, fullname = user
 
-    # -----------------------------
-    # Check password
-    # -----------------------------
-    if password != db_password:  # For production, replace with hashed password check
+    # Secure password check
+    if not check_password_hash(db_password, password):
         cur.close()
         conn.close()
-        return {"status": "error", "message": "Incorrect password"}, 401
+        return jsonify({"status": "error", "message": "Incorrect password"}), 401
 
-    # -----------------------------
-    # Set session variables
-    # -----------------------------
-    session['user_id'] = user_id       # Track logged-in user
-    session['user_type'] = user_type   # Track role (farmer/consumer/admin)
+    session["user_id"] = user_id
+    session["user_type"] = user_type
 
     cur.close()
     conn.close()
 
-    # -----------------------------
-    # Return login success
-    # -----------------------------
-    return {
+    return jsonify({
         "status": "success",
         "message": "Logged in successfully",
         "user_id": user_id,
         "user_type": user_type,
         "fullname": fullname
-    }, 200
-
+    }), 200
 
 # -----------------------------
 # LOGOUT API
 # -----------------------------
-@auth_bp.route('/logout', methods=['POST'])
+@auth_bp.route("/logout", methods=["POST"])
 def logout_api():
-    """
-    Logout user by clearing session
-    """
     session.clear()
-    return {"status": "success", "message": "Logged out successfully"}, 200
-
+    return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
 # -----------------------------
-# GET CURRENT USER API
+# GET CURRENT USER
 # -----------------------------
-@auth_bp.route('/me', methods=['GET'])
+@auth_bp.route("/me", methods=["GET"])
 def me_api():
-    """
-    Returns the current logged-in user
-    Can be used by frontend to check if user is authenticated
-    """
-    if 'user_id' not in session:
-        return {"authenticated": False}, 401
+    if "user_id" not in session:
+        return jsonify({"authenticated": False}), 401
 
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT id, fullname, email, user_type, location, latitude, longitude FROM users WHERE id=%s",
-        (session['user_id'],)
-    )
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if not user:
-        return {"authenticated": False}, 401
-
-    user_id, fullname, email, user_type, location, latitude, longitude = user
-
-    return {
-        "authenticated": True,
-        "user_id": user_id,
-        "fullname": fullname,
-        "email": email,
-        "user_type": user_type,
-        "location": location,
-        "latitude": latitude,
-        "longitude": longitude
-    }
-
-
-# -----------------------------
-# GET USER BY ID API (Public - for chat display)
-# -----------------------------
-@auth_bp.route('/users/<int:user_id>', methods=['GET'])
-def get_user_by_id(user_id):
-    """
-    Get user details by user ID (Public endpoint)
-    Used to get consumer/farmer info for chat display
-    No authentication required for this endpoint
-    """
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    # Fetch user from database
     cur.execute("""
-        SELECT id, fullname, email, user_type, location, latitude, longitude 
-        FROM users 
-        WHERE id=%s
-    """, (user_id,))
-    
+        SELECT id, fullname, email, user_type, location, latitude, longitude
+        FROM users WHERE id=%s
+    """, (session["user_id"],))
+
     user = cur.fetchone()
     cur.close()
     conn.close()
-    
+
     if not user:
-        return jsonify({
-            "status": "error", 
-            "message": f"User with ID {user_id} not found"
-        }), 404
-    
-    # Return user details
+        return jsonify({"authenticated": False}), 401
+
+    return jsonify({
+        "authenticated": True,
+        "user_id": user[0],
+        "fullname": user[1],
+        "email": user[2],
+        "user_type": user[3],
+        "location": user[4],
+        "latitude": user[5],
+        "longitude": user[6]
+    })
+
+# -----------------------------
+# GET USER BY ID (Public)
+# -----------------------------
+@auth_bp.route("/users/<int:user_id>", methods=["GET"])
+def get_user_by_id(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, fullname, email, user_type, location, latitude, longitude
+        FROM users WHERE id=%s
+    """, (user_id,))
+
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not user:
+        return jsonify({"status": "error", "message": "User not found"}), 404
+
     return jsonify({
         "status": "success",
         "id": user[0],
@@ -247,107 +216,78 @@ def get_user_by_id(user_id):
         "longitude": user[6]
     })
 
-
 # -----------------------------
-# GET ALL USERS (Optional - for admin)
+# GET ALL USERS
 # -----------------------------
-@auth_bp.route('/users', methods=['GET'])
+@auth_bp.route("/users", methods=["GET"])
 def get_all_users():
-    """
-    Get all users (Optional - for admin purposes)
-    Requires authentication
-    """
-    if 'user_id' not in session:
+    if "user_id" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     cur.execute("""
-        SELECT id, fullname, email, user_type, location 
-        FROM users 
-        ORDER BY id
+        SELECT id, fullname, email, user_type, location
+        FROM users ORDER BY id
     """)
-    
+
     users = cur.fetchall()
     cur.close()
     conn.close()
-    
-    user_list = []
-    for user in users:
-        user_list.append({
-            "id": user[0],
-            "fullname": user[1],
-            "email": user[2],
-            "user_type": user[3],
-            "location": user[4]
-        })
-    
+
     return jsonify({
         "status": "success",
-        "users": user_list,
-        "count": len(user_list)
+        "users": [
+            {
+                "id": u[0],
+                "fullname": u[1],
+                "email": u[2],
+                "user_type": u[3],
+                "location": u[4]
+            } for u in users
+        ],
+        "count": len(users)
     })
 
-
 # -----------------------------
-# UPDATE USER PROFILE
+# UPDATE PROFILE
 # -----------------------------
-@auth_bp.route('/update-profile', methods=['PUT'])
+@auth_bp.route("/update-profile", methods=["PUT"])
 def update_profile():
-    """
-    Update user profile (fullname, location, etc.)
-    """
-    if 'user_id' not in session:
+    if "user_id" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
-    
+
     data = request.get_json()
-    fullname = data.get('fullname')
-    location = data.get('location')
-    
+    fullname = data.get("fullname")
+    location = data.get("location")
+
     if not fullname or not location:
         return jsonify({"status": "error", "message": "Fullname and location are required"}), 400
-    
-    # Get coordinates
+
     latitude, longitude = location_coords.get(location, (None, None))
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     cur.execute("""
-        UPDATE users 
-        SET fullname = %s, location = %s, latitude = %s, longitude = %s
-        WHERE id = %s
-    """, (fullname, location, latitude, longitude, session['user_id']))
-    
+        UPDATE users
+        SET fullname=%s, location=%s, latitude=%s, longitude=%s
+        WHERE id=%s
+    """, (fullname, location, latitude, longitude, session["user_id"]))
+
     conn.commit()
     cur.close()
     conn.close()
-    
-    return jsonify({
-        "status": "success",
-        "message": "Profile updated successfully"
-    })
 
+    return jsonify({"status": "success", "message": "Profile updated successfully"})
 
 # -----------------------------
 # TEST ENDPOINT
 # -----------------------------
-@auth_bp.route('/test', methods=['GET'])
+@auth_bp.route("/test", methods=["GET"])
 def test_auth():
-    """
-    Test endpoint to verify auth routes are working
-    """
     return jsonify({
         "status": "success",
-        "message": "Auth endpoints are working",
-        "endpoints": [
-            "/auth/signup (POST)",
-            "/auth/login (POST)", 
-            "/auth/logout (POST)",
-            "/auth/me (GET)",
-            "/auth/users/<id> (GET)",
-            "/auth/users (GET)",
-            "/auth/update-profile (PUT)"
-        ]
+        "message": "Auth endpoints are working"
     })
