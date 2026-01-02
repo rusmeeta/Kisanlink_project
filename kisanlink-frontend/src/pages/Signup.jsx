@@ -1,12 +1,9 @@
-// src/pages/Signup.jsx
+// src/pages/Signup.jsx - SIMPLE VERSION
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// Signup component for KisanLink
 function Signup() {
   const navigate = useNavigate();
-
-  // State to store form input values
   const [formData, setFormData] = useState({
     fullname: "",
     email: "",
@@ -14,134 +11,148 @@ function Signup() {
     location: "",
     user_type: "",
   });
-
-  // State for error messages
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Regex validations (same rules as backend)
-  const emailRegex = /^[a-zA-Z0-9._%+-]{3,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  const passwordRegex =
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
-
-  // Update formData state on input change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError("");
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    // -----------------------------
-    // Frontend validations
-    // -----------------------------
-    if (!emailRegex.test(formData.email)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
-    if (!passwordRegex.test(formData.password)) {
-      setError(
-        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
-      );
-      return;
-    }
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("http://localhost:5001/auth/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(formData),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullname: formData.fullname.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          location: formData.location,
+          user_type: formData.user_type
+        }),
       });
 
       const data = await response.json();
-      console.log("Signup response:", data);
 
-      if (response.ok) {
-        alert(data.message);
+      if (response.ok && data.success) {
+        alert(
+          "✅ Account Created!\n\n" +
+          "Please check your email for verification link.\n" +
+          "You must verify your email before logging in."
+        );
+        
+        // Clear form
+        setFormData({
+          fullname: "",
+          email: "",
+          password: "",
+          location: "",
+          user_type: "",
+        });
+        
+        // Navigate to login
         navigate("/login");
+        
       } else {
-        setError(data.message || "Signup failed. Please try again.");
+        // Handle specific errors
+        if (data.error && data.error.includes("not verified")) {
+          const resend = window.confirm(
+            "This email is registered but not verified. Resend verification email?"
+          );
+          if (resend) {
+            const resendResponse = await fetch("http://localhost:5001/auth/resend-verification", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: formData.email.trim().toLowerCase() }),
+            });
+            
+            const resendData = await resendResponse.json();
+            if (resendResponse.ok) {
+              alert("✅ Verification email resent! Check your inbox.");
+            } else {
+              alert(resendData.error || "Failed to resend");
+            }
+          }
+        } else {
+          setError(data.error || "Signup failed");
+        }
       }
     } catch (err) {
-      console.error("Error signing up:", err);
-      setError("Something went wrong. Please try again.");
+      setError("Network error. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-green-50 flex items-center justify-center min-h-screen px-4">
+    <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-3xl font-bold text-green-700 mb-6 text-center">
-          Create an Account
+        <h2 className="text-2xl font-bold text-green-700 mb-6 text-center">
+          Create Account
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Full Name */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Full Name
-            </label>
+            <label className="block text-sm font-medium mb-1">Full Name</label>
             <input
               type="text"
               name="fullname"
               value={formData.fullname}
               onChange={handleChange}
               required
+              className="w-full border rounded px-3 py-2"
               placeholder="Your full name"
-              className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-green-500"
             />
           </div>
 
-          {/* Email */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Email Address
-            </label>
+            <label className="block text-sm font-medium mb-1">Email</label>
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
               required
-              placeholder="example@mail.com"
-              className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-green-500"
+              className="w-full border rounded px-3 py-2"
+              placeholder="your@email.com"
             />
           </div>
 
-          {/* Password */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Password
-            </label>
+            <label className="block text-sm font-medium mb-1">Password</label>
             <input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
               required
-              placeholder="At least 8 chars with A, a, 1, @"
-              className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-green-500"
+              className="w-full border rounded px-3 py-2"
+              placeholder="At least 8 characters"
             />
+            <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
           </div>
 
-          {/* Location */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Location
-            </label>
+            <label className="block text-sm font-medium mb-1">Location</label>
             <select
               name="location"
               value={formData.location}
               onChange={handleChange}
               required
-              className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-green-500"
+              className="w-full border rounded px-3 py-2"
             >
-              <option value="">Select your location</option>
+              <option value="">Select location</option>
               <option value="Naya Thimi">Naya Thimi</option>
               <option value="Gatthaghar">Gatthaghar</option>
               <option value="Kausaltar">Kausaltar</option>
@@ -149,19 +160,16 @@ function Signup() {
             </select>
           </div>
 
-          {/* User Type */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              User Type
-            </label>
+            <label className="block text-sm font-medium mb-1">User Type</label>
             <select
               name="user_type"
               value={formData.user_type}
               onChange={handleChange}
               required
-              className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-green-500"
+              className="w-full border rounded px-3 py-2"
             >
-              <option value="">Select your role</option>
+              <option value="">Select type</option>
               <option value="farmer">Farmer</option>
               <option value="consumer">Consumer</option>
             </select>
@@ -169,18 +177,28 @@ function Signup() {
 
           <button
             type="submit"
-            className="w-full bg-green-600 text-white font-semibold py-3 rounded-md hover:bg-green-700 transition"
+            disabled={isSubmitting}
+            className={`w-full py-2 rounded font-medium ${
+              isSubmitting 
+                ? "bg-gray-400" 
+                : "bg-green-600 hover:bg-green-700 text-white"
+            }`}
           >
-            Sign Up
+            {isSubmitting ? "Creating..." : "Sign Up"}
           </button>
         </form>
 
-        {error && <p className="mt-4 text-red-600">{error}</p>}
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Email verification required. 
+            Check your inbox after signing up.
+          </p>
+        </div>
 
-        <p className="mt-6 text-center text-gray-600">
+        <p className="mt-4 text-center">
           Already have an account?{" "}
-          <a href="/login" className="text-green-700 font-semibold hover:underline">
-            Log in
+          <a href="/login" className="text-green-600 font-medium">
+            Login
           </a>
         </p>
       </div>

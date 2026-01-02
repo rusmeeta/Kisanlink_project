@@ -88,26 +88,14 @@ const AdminLogin = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-100 rounded-full">
-              <Shield className="h-10 w-10 text-blue-600" />
-            </div>
+            
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Kisanlink Admin</h1>
           <p className="text-gray-600 mt-2">Access the admin dashboard</p>
         </div>
 
         {/* Setup Button (for first time) */}
-        <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-          <p className="text-sm text-yellow-800 mb-2">
-            First time? Create default admin account
-          </p>
-          <button
-            onClick={setupDefaultAdmin}
-            className="w-full py-2 bg-yellow-100 text-yellow-800 rounded-lg font-medium hover:bg-yellow-200 transition-colors"
-          >
-            Create Default Admin
-          </button>
-        </div>
+        
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-6">

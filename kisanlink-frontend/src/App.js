@@ -29,9 +29,11 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/Dashboard";
 import FarmersManagement from "./pages/admin/FarmersManagement";
 import ProductsManagement from "./pages/admin/ProductsManagement";
+import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
 // =============================================
 
+import VerificationSuccess from "./pages/VerificationSuccess";
 // Import ProtectedRoute
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -116,10 +118,13 @@ function App() {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/farmers" element={<FarmersManagement />} />
         <Route path="/admin/products" element={<ProductsManagement />} />
+        <Route path="/admin/consumers" element={<ConsumersManagement />} />
         
 
         <Route path="/admin/dashboard" element={<TestDashboard />} />
         {/* ============================================ */}
+
+         <Route path="/verification-success" element={<VerificationSuccess />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

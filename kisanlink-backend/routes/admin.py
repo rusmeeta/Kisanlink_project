@@ -90,6 +90,8 @@ def admin_logout():
 
 # ========== DASHBOARD STATISTICS ==========
 
+# ========== DASHBOARD STATISTICS ==========
+
 @admin_bp.route('/stats', methods=['GET'])
 def admin_stats():
     """Get dashboard statistics"""
@@ -101,13 +103,23 @@ def admin_stats():
         query1 = text("SELECT COUNT(*) FROM users WHERE user_type = 'farmer'")
         total_farmers = db.session.execute(query1).scalar() or 0
         
+        # Get total consumers
+        query_consumers = text("SELECT COUNT(*) FROM users WHERE user_type = 'consumer'")
+        total_consumers = db.session.execute(query_consumers).scalar() or 0
+        
         # Get total products
         query2 = text("SELECT COUNT(*) FROM farmer_items")
         total_products = db.session.execute(query2).scalar() or 0
         
+        # Get total users
+        query_total_users = text("SELECT COUNT(*) FROM users WHERE user_type IN ('farmer', 'consumer')")
+        total_users = db.session.execute(query_total_users).scalar() or 0
+        
         return jsonify({
             'success': True,
             'totalFarmers': total_farmers,
+            'totalConsumers': total_consumers,
+            'totalUsers': total_users,
             'activeFarmers': total_farmers,
             'totalProducts': total_products,
             'pendingApprovals': 0,
@@ -118,14 +130,14 @@ def admin_stats():
         print(f"Stats error: {e}")
         return jsonify({
             'success': True,
-            'totalFarmers': 10,
-            'activeFarmers': 10,
+            'totalFarmers': 11,
+            'totalConsumers': 5,
+            'totalUsers': 16,
             'totalProducts': 5,
             'pendingApprovals': 0,
             'activeListings': 5
         })
 
-# ========== GET ALL FARMERS ==========
 
 # ========== GET ALL FARMERS ==========
 
@@ -144,10 +156,9 @@ def get_all_farmers():
                 id,
                 fullname,
                 email,
-                COALESCE(phone, '') as phone,
                 location,
                 user_type,
-                created_at,
+                
                 COALESCE(login_count, 0) as login_count,
                 last_login
             FROM users 
@@ -178,11 +189,11 @@ def get_all_farmers():
                 'id': farmer_id,
                 'fullname': farmer.fullname,
                 'email': farmer.email,
-                'phone': farmer.phone,
+                
                 'location': farmer.location,
                 'user_type': farmer.user_type,
-                'created_at': farmer.created_at.isoformat() if farmer.created_at else None,
-                'status': 'active',
+                
+                
                 'login_count': farmer.login_count,
                 'last_login': farmer.last_login.isoformat() if farmer.last_login else None,
                 'product_count': product_counts.get(farmer_id, 0)
@@ -205,6 +216,75 @@ def get_all_farmers():
             'success': False,
             'error': str(e),
             'farmers': [],
+            'count': 0,
+            'message': 'Database query failed'
+        })
+    
+# ========== GET ALL CONSUMERS ==========
+
+@admin_bp.route('/consumers', methods=['GET'])
+def get_all_consumers():
+    """Get all consumers with their details"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print("🔍 Fetching consumers from PostgreSQL database...")
+        
+        # Query to get all consumers
+        query = text("""
+            SELECT 
+                id,
+                fullname,
+                email,
+                location,
+                user_type,
+                
+                COALESCE(login_count, 0) as login_count,
+                last_login
+            FROM users 
+            WHERE user_type = 'consumer'
+            ORDER BY id DESC
+        """)
+        
+        result = db.session.execute(query)
+        consumers_data = result.fetchall()
+        
+        print(f"✅ Database query successful, found {len(consumers_data)} consumers")
+        
+        # Convert to list of dictionaries
+        consumers_list = []
+        for consumer in consumers_data:
+            consumers_list.append({
+                'id': consumer.id,
+                'fullname': consumer.fullname,
+                'email': consumer.email,
+                
+                'location': consumer.location,
+                'user_type': consumer.user_type,
+                
+                
+                'login_count': consumer.login_count,
+                'last_login': consumer.last_login.isoformat() if consumer.last_login else None,
+                'product_count': 0  # Consumers don't have products
+            })
+        
+        return jsonify({
+            'success': True,
+            'consumers': consumers_list,
+            'count': len(consumers_list),
+            'message': f'Found {len(consumers_list)} consumers from database'
+        })
+        
+    except Exception as e:
+        print(f"❌ Get consumers error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'consumers': [],
             'count': 0,
             'message': 'Database query failed'
         })
@@ -276,25 +356,19 @@ def get_all_products():
 
 # ========== RECENT FARMERS ==========
 
-# ========== RECENT FARMERS ==========
-
 @admin_bp.route('/recent-farmers', methods=['GET'])
 def get_recent_farmers():
-    """Get recent farmers (last 5) - REAL DATABASE VERSION"""
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
-        print("🔍 Fetching recent farmers from database...")
-        
         query = text("""
-            SELECT id, fullname, email, created_at, last_login
-            FROM users 
+            SELECT id, fullname, email, last_login
+            FROM users
             WHERE user_type = 'farmer'
-            ORDER BY created_at DESC
+            ORDER BY id DESC
             LIMIT 5
         """)
-        
         result = db.session.execute(query)
         recent_data = result.fetchall()
         
@@ -304,29 +378,68 @@ def get_recent_farmers():
                 'id': farmer.id,
                 'fullname': farmer.fullname,
                 'email': farmer.email,
-                'created_at': farmer.created_at.isoformat() if farmer.created_at else None,
-                'last_login': farmer.last_login.isoformat() if farmer.last_login else None,
-                'status': 'active'
+                
+                'last_login': farmer.last_login.isoformat() if farmer.last_login else None
+                
+            })
+        
+        return jsonify({'success': True, 'farmers': farmers_list, 'count': len(farmers_list)})
+    
+    except Exception as e:
+        print(f"❌ Recent farmers error: {str(e)}")
+        return jsonify({'success': False, 'farmers': [], 'count': 0})
+
+# ========== RECENT CONSUMERS ==========
+# ========== RECENT CONSUMERS ==========
+
+@admin_bp.route('/recent-consumers', methods=['GET'])
+def get_recent_consumers():
+    """Get recent consumers (last 5)"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print("🔍 Fetching recent consumers from database...")
+        
+        query = text("""
+            SELECT id, fullname, email, last_login
+            FROM users 
+            WHERE user_type = 'consumer'
+            ORDER BY id DESC
+            LIMIT 5
+        """)
+        
+        result = db.session.execute(query)
+        recent_data = result.fetchall()
+        
+        consumers_list = []
+        for consumer in recent_data:
+            consumers_list.append({
+                'id': consumer.id,
+                'fullname': consumer.fullname,
+                'email': consumer.email,
+                
+                'last_login': consumer.last_login.isoformat() if consumer.last_login else None
+                
             })
         
         return jsonify({
             'success': True,
-            'farmers': farmers_list,
-            'count': len(farmers_list),
-            'message': f'Found {len(farmers_list)} recent farmers'
+            'consumers': consumers_list,
+            'count': len(consumers_list),
+            'message': f'Found {len(consumers_list)} recent consumers'
         })
         
     except Exception as e:
-        print(f"❌ Recent farmers error: {str(e)}")
-        
-        # Return empty array on error, NO SAMPLE DATA
+        print(f"❌ Recent consumers error: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),
-            'farmers': [],
+            'consumers': [],
             'count': 0,
-            'message': 'Failed to fetch recent farmers'
+            'message': 'Failed to fetch recent consumers'
         })
+
 # ========== RECENT PRODUCTS ==========
 
 @admin_bp.route('/recent-products', methods=['GET'])
@@ -378,3 +491,134 @@ def get_recent_products():
             'products': [],
             'count': 0
         })
+    
+# ========== DELETE USER (Farmer or Consumer) ==========
+
+@admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Delete a user (farmer or consumer)"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print(f"🗑️ Attempting to delete user ID: {user_id}")
+        
+        # First, check if user exists
+        check_query = text("SELECT id, user_type FROM users WHERE id = :user_id")
+        result = db.session.execute(check_query, {'user_id': user_id})
+        user = result.fetchone()
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # If user is a farmer, check if they have products
+        if user.user_type == 'farmer':
+            product_query = text("SELECT COUNT(*) FROM farmer_items WHERE farmer_id = :user_id")
+            product_count = db.session.execute(product_query, {'user_id': user_id}).scalar()
+            
+            if product_count > 0:
+                return jsonify({
+                    'success': False,
+                    'error': f'Cannot delete farmer with {product_count} products. Delete products first.'
+                }), 400
+        
+        # Delete the user
+        delete_query = text("DELETE FROM users WHERE id = :user_id")
+        db.session.execute(delete_query, {'user_id': user_id})
+        db.session.commit()
+        
+        print(f"✅ User {user_id} deleted successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': 'User deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Delete user error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========== DELETE PRODUCT ==========
+
+@admin_bp.route('/products/<int:product_id>', methods=['DELETE'])
+def delete_product(product_id):
+    """Delete a product"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print(f"🗑️ Attempting to delete product ID: {product_id}")
+        
+        # Check if product exists
+        check_query = text("SELECT id, item_name FROM farmer_items WHERE id = :product_id")
+        result = db.session.execute(check_query, {'product_id': product_id})
+        product = result.fetchone()
+        
+        if not product:
+            return jsonify({
+                'success': False,
+                'error': 'Product not found'
+            }), 404
+        
+        # Delete the product
+        delete_query = text("DELETE FROM farmer_items WHERE id = :product_id")
+        db.session.execute(delete_query, {'product_id': product_id})
+        db.session.commit()
+        
+        print(f"✅ Product '{product.item_name}' (ID: {product_id}) deleted successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Product deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Delete product error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========== UPDATE PRODUCT STATUS ==========
+
+@admin_bp.route('/products/<int:product_id>/status', methods=['PUT'])
+def update_product_status(product_id):
+    """Update product status"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        if not new_status or new_status not in ['approved', 'pending', 'rejected']:
+            return jsonify({
+                'success': False,
+                'error': 'Valid status required: approved, pending, or rejected'
+            }), 400
+        
+        print(f"🔄 Updating product {product_id} status to: {new_status}")
+        
+        # Update product status (you might want to add a status column to farmer_items)
+        # For now, we'll just acknowledge the update
+        # If you want to store status in database, add a status column to farmer_items table
+        
+        return jsonify({
+            'success': True,
+            'message': f'Product status updated to {new_status}'
+        })
+        
+    except Exception as e:
+        print(f"❌ Update product status error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

@@ -223,19 +223,7 @@ const ProductsManagement = () => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Status</option>
-                <option value="approved">Approved</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </div>
+            
           </div>
         </div>
 
@@ -263,9 +251,7 @@ const ProductsManagement = () => {
                     </div>
                   )}
                   <div className="absolute top-3 right-3">
-                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                      Approved
-                    </span>
+                    
                   </div>
                 </div>
 
@@ -284,7 +270,7 @@ const ProductsManagement = () => {
                       <span className="truncate">{product.location}</span>
                     </div>
                     <div className="flex items-center text-sm font-semibold text-gray-900">
-                      <DollarSign className="h-4 w-4 mr-2 flex-shrink-0" />
+                      
                       ₹{product.price}
                     </div>
                   </div>
@@ -303,20 +289,8 @@ const ProductsManagement = () => {
 
                   {/* Actions */}
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleStatusChange(product.id, 'approved')}
-                      className="flex-1 bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-green-700 flex items-center justify-center transition-colors"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(product.id, 'rejected')}
-                      className="flex-1 bg-red-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-red-700 flex items-center justify-center transition-colors"
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Reject
-                    </button>
+                    
+                    
                     <button
                       onClick={() => handleDeleteProduct(product.id)}
                       className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"

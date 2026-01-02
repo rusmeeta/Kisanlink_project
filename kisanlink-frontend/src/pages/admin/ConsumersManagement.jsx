@@ -1,4 +1,4 @@
-// src/pages/admin/FarmersManagement.jsx
+// src/pages/admin/ConsumersManagement.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -7,23 +7,21 @@ import {
   Filter,
   Eye,
   Trash2,
-  UserCheck,
-  UserX,
   Mail,
   MapPin,
   Calendar,
   RefreshCw,
-  Package,
-  LogOut
+  UserCircle,
+  ShoppingBag
 } from "lucide-react";
 
-const FarmersManagement = () => {
+const ConsumersManagement = () => {
   const navigate = useNavigate();
-  const [farmers, setFarmers] = useState([]);
+  const [consumers, setConsumers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedFarmer, setSelectedFarmer] = useState(null);
+  const [selectedConsumer, setSelectedConsumer] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -36,7 +34,7 @@ const FarmersManagement = () => {
     }
     
     checkAdminAuth();
-    fetchFarmers();
+    fetchConsumers();
   }, [navigate]);
 
   const checkAdminAuth = async () => {
@@ -56,92 +54,72 @@ const FarmersManagement = () => {
     }
   };
 
-  const fetchFarmers = async () => {
+  const fetchConsumers = async () => {
     try {
-      console.log("🔍 Fetching farmers from backend...");
+      console.log("🔍 Fetching consumers from backend...");
       setLoading(true);
       setError("");
       
-      const res = await axios.get("http://localhost:5001/admin/farmers", {
+      const res = await axios.get("http://localhost:5001/admin/consumers", {
         withCredentials: true,
         timeout: 10000
       });
       
-      console.log("📦 Farmers API response:", res.data);
+      console.log("📦 Consumers API response:", res.data);
       
-      if (res.data.success && Array.isArray(res.data.farmers)) {
-        console.log(`✅ Found ${res.data.farmers.length} farmers from database`);
-        setFarmers(res.data.farmers);
+      if (res.data.success && Array.isArray(res.data.consumers)) {
+        console.log(`✅ Found ${res.data.consumers.length} consumers from database`);
+        setConsumers(res.data.consumers);
       } else {
         console.error("❌ Unexpected response format:", res.data);
-        setError("Failed to load farmers: Invalid response format");
-        setFarmers([]);
+        setError("Failed to load consumers: Invalid response format");
+        setConsumers([]);
       }
       
     } catch (err) {
-      console.error("❌ Error fetching farmers:", err);
-      setError(`Failed to load farmers: ${err.message}`);
-      setFarmers([]);
+      console.error("❌ Error fetching consumers:", err);
+      setError(`Failed to load consumers: ${err.message}`);
+      setConsumers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusChange = async (farmerId, newStatus) => {
-    if (!window.confirm(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} this farmer?`)) return;
+  const handleDeleteConsumer = async (consumerId) => {
+    if (!window.confirm("Are you sure you want to delete this consumer? This action cannot be undone.")) return;
 
     try {
-      await axios.put(
-        `http://localhost:5001/admin/farmers/${farmerId}/status`,
-        { status: newStatus },
-        { withCredentials: true }
-      );
-      
-      fetchFarmers();
-      alert(`Farmer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
-      
-    } catch (err) {
-      console.error("Error updating farmer:", err);
-      alert("Failed to update farmer status");
-    }
-  };
-
-  const handleDeleteFarmer = async (farmerId) => {
-    if (!window.confirm("Are you sure you want to delete this farmer? This action cannot be undone.")) return;
-
-    try {
-      // Use the correct endpoint for deleting users
       await axios.delete(
-        `http://localhost:5001/admin/users/${farmerId}`,
+        `http://localhost:5001/admin/users/${consumerId}`,
         { withCredentials: true }
       );
       
-      fetchFarmers();
-      alert("Farmer deleted successfully!");
+      fetchConsumers();
+      alert("Consumer deleted successfully!");
       
     } catch (err) {
-      console.error("Error deleting farmer:", err);
+      console.error("Error deleting consumer:", err);
       
       // Show specific error message from backend
       if (err.response && err.response.data && err.response.data.error) {
-        alert(`Failed to delete farmer: ${err.response.data.error}`);
+        alert(`Failed to delete consumer: ${err.response.data.error}`);
       } else {
-        alert("Failed to delete farmer. Please try again.");
+        alert("Failed to delete consumer. Please try again.");
       }
     }
   };
 
-  const viewFarmerDetails = (farmer) => {
-    setSelectedFarmer(farmer);
+  const viewConsumerDetails = (consumer) => {
+    setSelectedConsumer(consumer);
   };
 
-  const filteredFarmers = farmers.filter((farmer) => {
+  const filteredConsumers = consumers.filter((consumer) => {
     const matchesSearch = 
-      (farmer.fullname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (farmer.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (farmer.location || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (consumer.fullname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (consumer.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (consumer.location || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" || farmer.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || consumer.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -159,12 +137,27 @@ const FarmersManagement = () => {
     }
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "Never";
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return "Invalid date";
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading farmers from database...</p>
+          <p className="text-gray-600">Loading consumers from database...</p>
         </div>
       </div>
     );
@@ -183,11 +176,11 @@ const FarmersManagement = () => {
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-bold text-gray-900">Farmers Management</h1>
+              <h1 className="text-xl font-bold text-gray-900">Consumers Management</h1>
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={fetchFarmers}
+                onClick={fetchConsumers}
                 className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -203,9 +196,9 @@ const FarmersManagement = () => {
         <div className="mb-8">
           <div className="flex justify-between items-start md:items-center mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Manage Farmers</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Manage Consumers</h2>
               <p className="text-gray-600">
-                Total {farmers.length} farmers registered • Showing {filteredFarmers.length} farmers
+                Total {consumers.length} consumers registered • Showing {filteredConsumers.length} consumers
               </p>
             </div>
             <div className="text-sm text-gray-500">
@@ -244,20 +237,20 @@ const FarmersManagement = () => {
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
+                <option value="inactive">Inactive</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Farmers Table */}
+        {/* Consumers Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Farmer
+                    Consumer
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Contact
@@ -269,10 +262,7 @@ const FarmersManagement = () => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Products
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Login
+                    Activity
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -280,22 +270,22 @@ const FarmersManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredFarmers.length > 0 ? (
-                  filteredFarmers.map((farmer) => (
-                    <tr key={farmer.id} className="hover:bg-gray-50">
+                {filteredConsumers.length > 0 ? (
+                  filteredConsumers.map((consumer) => (
+                    <tr key={consumer.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {(farmer.fullname || 'F').charAt(0).toUpperCase()}
+                          <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-semibold">
+                              {(consumer.fullname || 'C').charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {farmer.fullname || 'Unknown'}
+                              {consumer.fullname || 'Unknown'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              ID: {farmer.id}
+                              ID: {consumer.id}
                             </div>
                           </div>
                         </div>
@@ -303,65 +293,47 @@ const FarmersManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-900">
                           <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.email || 'No email'}
+                          {consumer.email || 'No email'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-900">
                           <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.location || 'Unknown'}
+                          {consumer.location || 'Unknown'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          farmer.status === 'active'
+                          consumer.status === 'active'
                             ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {farmer.status || 'active'}
+                          {consumer.status || 'active'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Package className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.product_count || 0} products
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          {formatDate(farmer.last_login)}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <ShoppingBag className="h-4 w-4 mr-2 text-gray-400" />
+                            Login count: {consumer.login_count || 0}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                            Last login: {formatDate(consumer.last_login)}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => viewFarmerDetails(farmer)}
+                            onClick={() => viewConsumerDetails(consumer)}
                             className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
                             title="View Details"
                           >
                             <Eye className="h-5 w-5" />
                           </button>
                           <button
-                            onClick={() => handleStatusChange(
-                              farmer.id,
-                              farmer.status === 'active' ? 'suspended' : 'active'
-                            )}
-                            className={`p-1 hover:bg-gray-50 rounded ${
-                              farmer.status === 'active'
-                                ? 'text-red-600 hover:text-red-900'
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
-                            title={farmer.status === 'active' ? 'Suspend' : 'Activate'}
-                          >
-                            {farmer.status === 'active' ? (
-                              <UserX className="h-5 w-5" />
-                            ) : (
-                              <UserCheck className="h-5 w-5" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteFarmer(farmer.id)}
+                            onClick={() => handleDeleteConsumer(consumer.id)}
                             className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
                             title="Delete"
                           >
@@ -373,16 +345,16 @@ const FarmersManagement = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center">
+                    <td colSpan="6" className="px-6 py-12 text-center">
                       <div className="text-gray-500">
-                        <UserX className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p className="text-lg font-medium">No farmers found</p>
+                        <UserCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p className="text-lg font-medium">No consumers found</p>
                         <p className="text-sm">Try adjusting your search or filter</p>
                         <button
-                          onClick={fetchFarmers}
+                          onClick={fetchConsumers}
                           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
-                          Refresh Farmers
+                          Refresh Consumers
                         </button>
                       </div>
                     </td>
@@ -393,15 +365,15 @@ const FarmersManagement = () => {
           </div>
         </div>
 
-        {/* Farmer Details Modal */}
-        {selectedFarmer && (
+        {/* Consumer Details Modal */}
+        {selectedConsumer && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Farmer Details</h3>
+                  <h3 className="text-xl font-bold text-gray-900">Consumer Details</h3>
                   <button
-                    onClick={() => setSelectedFarmer(null)}
+                    onClick={() => setSelectedConsumer(null)}
                     className="text-gray-400 hover:text-gray-600 text-2xl"
                   >
                     ✕
@@ -411,18 +383,18 @@ const FarmersManagement = () => {
                 <div className="space-y-6">
                   {/* Profile Section */}
                   <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0 h-20 w-20 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-2xl text-blue-600 font-bold">
-                        {(selectedFarmer.fullname || 'F').charAt(0).toUpperCase()}
+                    <div className="flex-shrink-0 h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl text-green-600 font-bold">
+                        {(selectedConsumer.fullname || 'C').charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <h4 className="text-lg font-bold text-gray-900">{selectedFarmer.fullname || 'Unknown'}</h4>
-                      <p className="text-gray-600">{selectedFarmer.email || 'No email'}</p>
+                      <h4 className="text-lg font-bold text-gray-900">{selectedConsumer.fullname || 'Unknown'}</h4>
+                      <p className="text-gray-600">{selectedConsumer.email || 'No email'}</p>
                       <div className="flex items-center mt-2">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                        <ShoppingBag className="h-4 w-4 mr-2 text-gray-400" />
                         <span className="text-sm text-gray-500">
-                          Last login: {formatDate(selectedFarmer.last_login)}
+                          Consumer ID: {selectedConsumer.id}
                         </span>
                       </div>
                     </div>
@@ -432,25 +404,40 @@ const FarmersManagement = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Location</p>
-                      <p className="font-medium">{selectedFarmer.location || 'Unknown'}</p>
+                      <p className="font-medium">{selectedConsumer.location || 'Unknown'}</p>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Status</p>
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        selectedFarmer.status === 'active'
+                        selectedConsumer.status === 'active'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {selectedFarmer.status || 'active'}
+                        {selectedConsumer.status || 'active'}
                       </span>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">Products</p>
-                      <p className="font-medium">{selectedFarmer.product_count || 0} listed</p>
+                      <p className="text-sm text-gray-500">Login Count</p>
+                      <p className="font-medium">{selectedConsumer.login_count || 0}</p>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">Login Count</p>
-                      <p className="font-medium">{selectedFarmer.login_count || 0}</p>
+                      <p className="text-sm text-gray-500">Last Login</p>
+                      <p className="font-medium">{formatDateTime(selectedConsumer.last_login)}</p>
+                    </div>
+                  </div>
+
+                  {/* Additional Info */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-500 mb-2">Account Information</p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">User Type:</span>
+                        <span className="font-medium">Consumer</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Registration Date:</span>
+                        <span className="font-medium">{selectedConsumer.created_at ? formatDate(selectedConsumer.created_at) : 'Not available'}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -458,28 +445,18 @@ const FarmersManagement = () => {
                   <div className="flex space-x-3 pt-4 border-t">
                     <button
                       onClick={() => {
-                        handleStatusChange(
-                          selectedFarmer.id,
-                          selectedFarmer.status === 'active' ? 'suspended' : 'active'
-                        );
-                        setSelectedFarmer(null);
-                      }}
-                      className={`flex-1 py-2 px-4 rounded-lg font-medium ${
-                        selectedFarmer.status === 'active'
-                          ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                          : 'bg-green-50 text-green-700 hover:bg-green-100'
-                      }`}
-                    >
-                      {selectedFarmer.status === 'active' ? 'Suspend Account' : 'Activate Account'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDeleteFarmer(selectedFarmer.id);
-                        setSelectedFarmer(null);
+                        handleDeleteConsumer(selectedConsumer.id);
+                        setSelectedConsumer(null);
                       }}
                       className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
                     >
                       Delete Account
+                    </button>
+                    <button
+                      onClick={() => setSelectedConsumer(null)}
+                      className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300"
+                    >
+                      Close
                     </button>
                   </div>
                 </div>
@@ -492,4 +469,4 @@ const FarmersManagement = () => {
   );
 };
 
-export default FarmersManagement;
+export default ConsumersManagement;
