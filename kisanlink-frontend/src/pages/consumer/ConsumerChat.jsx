@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
+import { formatChatTime } from '../../utils/timeUtils';
 
 
 const ConsumerChat = () => {
@@ -28,7 +29,7 @@ const ConsumerChat = () => {
   // Auto-refresh messages
   useEffect(() => {
     if (!farmerId) return;
-    
+
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [farmerId]);
@@ -36,25 +37,25 @@ const ConsumerChat = () => {
   // FETCH FARMER DETAILS - IMPROVED
   const fetchFarmerDetails = async (id) => {
     console.log(`Fetching details for farmer ID: ${id}`);
-    
+
     // Try multiple endpoints to get farmer name
     const endpoints = [
       `http://localhost:5001/consumer/farmer-details/${id}`,
       `http://localhost:5001/auth/users/${id}`,
       `http://localhost:5001/farmer/me?user_id=${id}`,
     ];
-    
+
     for (const endpoint of endpoints) {
       try {
         console.log(`Trying endpoint: ${endpoint}`);
         const response = await fetch(endpoint, {
           credentials: "include",
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log(`Response from ${endpoint}:`, data);
-          
+
           if (data.status === "success") {
             // Handle different response structures
             const farmerData = data.farmer || data;
@@ -71,13 +72,13 @@ const ConsumerChat = () => {
         console.error(`Failed with endpoint ${endpoint}:`, err);
       }
     }
-    
+
     // Last resort: Try to get name from messages
     try {
       const msgResponse = await fetch(`http://localhost:5001/messages/${id}`, {
         credentials: "include",
       });
-      
+
       if (msgResponse.ok) {
         const msgData = await msgResponse.json();
         if (msgData.status === "success" && msgData.other_user) {
@@ -93,7 +94,7 @@ const ConsumerChat = () => {
     } catch (err) {
       console.error("Failed to get name from messages:", err);
     }
-    
+
     // Ultimate fallback
     console.log("Using fallback for farmer name");
     setFarmerDetails({
@@ -107,19 +108,19 @@ const ConsumerChat = () => {
   // Fetch messages
   const fetchMessages = async () => {
     if (!farmerId) return;
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/messages/${farmerId}`, {
         credentials: "include",
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log("Messages response:", data); // Debug
-        
+
         if (data.status === "success") {
           setMessages(data.messages || []);
-          
+
           // Also try to get farmer name from messages if we don't have it
           if (data.other_user && !farmerDetails) {
             setFarmerDetails({
@@ -292,7 +293,7 @@ const ConsumerChat = () => {
 
   const formatTime = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    const date = new Date(dateString + "Z");
     return date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -424,8 +425,12 @@ const ConsumerChat = () => {
         ) : (
           <div className="p-4">
             {messages.map((msg) => {
-              const isUser = msg.sender_id !== farmerId;
-              const hasFile = msg.file_url;
+              if (!farmerDetails || !msg.sender_id) return null;
+
+  // ✅ Use logged-in consumer ID to determine sender
+  const isUser = msg.sender_id !== parseInt(farmerId); // Messages from consumer = right side
+  const hasFile = !!msg.file_url;
+
 
               return (
                 <div
@@ -433,11 +438,10 @@ const ConsumerChat = () => {
                   className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md ${
-                      isUser
+                    className={`max-w-xs lg:max-w-md ${isUser
                         ? "bg-green-600 text-white rounded-2xl rounded-br-none"
                         : "bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-bl-none shadow-sm"
-                    }`}
+                      }`}
                   >
                     {hasFile && (
                       <div className="p-3 border-b border-gray-200">
@@ -453,11 +457,10 @@ const ConsumerChat = () => {
                             href={`${API_BASE_URL}${msg.file_url}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`ml-2 px-2 py-1 text-xs rounded transition-colors ${
-                              isUser
+                            className={`ml-2 px-2 py-1 text-xs rounded transition-colors ${isUser
                                 ? "bg-green-700 text-white hover:bg-green-800"
                                 : "bg-green-100 text-green-800 hover:bg-green-200"
-                            }`}
+                              }`}
                           >
                             View
                           </a>

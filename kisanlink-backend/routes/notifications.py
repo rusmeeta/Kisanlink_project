@@ -38,7 +38,7 @@ def get_notifications():
             "farmer_id": farmer_id,
             "consumer_id": consumer_id,  # ADD THIS LINE
             "is_read": getattr(n, "is_read", False),
-            "created_at": n.created_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(n, "created_at", None) else None
+            "created_at": n.created_at.isoformat() if getattr(n, "created_at", None) else None
         })
 
     return jsonify({"status": "success", "notifications": data})

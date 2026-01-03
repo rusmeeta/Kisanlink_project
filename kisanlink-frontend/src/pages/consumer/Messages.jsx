@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../config";
 import { Link } from "react-router-dom";
-import { formatConversationTime } from '../../utils/timeUtils';
 
 const Messages = () => {
   const [conversations, setConversations] = useState([]);
@@ -20,13 +19,13 @@ const Messages = () => {
             'Accept': 'application/json'
           }
         });
-
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-
+        
         const data = await response.json();
-
+        
         if (data.status === "success") {
           setConversations(data.conversations || []);
         } else {
@@ -59,13 +58,13 @@ const Messages = () => {
             <h2 className="text-xl font-bold text-red-700 mb-2">Error Loading Messages</h2>
             <p className="text-red-600 mb-4">{error}</p>
             <div className="space-x-4">
-              <button
+              <button 
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
               >
                 Retry
               </button>
-              <Link
+              <Link 
                 to="/consumer/dashboard"
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
               >
@@ -91,7 +90,7 @@ const Messages = () => {
             <div className="text-green-400 text-6xl mb-4">💬</div>
             <h3 className="text-xl font-semibold text-gray-700 mb-2">No conversations yet</h3>
             <p className="text-gray-500 mb-6">Start chatting with farmers to see your conversations here</p>
-            <Link
+            <Link 
               to="/consumer/dashboard"
               className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
@@ -125,7 +124,10 @@ const Messages = () => {
                           <p className="text-sm text-gray-500">ID: {conv.farmer_id}</p>
                         </div>
                         <span className="text-xs text-gray-400">
-                          {formatConversationTime(conv.last_msg_time)}
+                          {conv.last_msg_time ? new Date(conv.last_msg_time).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          }) : 'Just now'}
                         </span>
                       </div>
                       <p className="mt-1 text-gray-600 truncate">

@@ -1,7 +1,7 @@
 // OrderStatus.jsx
 import React, { useState, useEffect } from 'react';
-// Remove or comment out the CSS import if file doesn't exist
-// import './OrderStatus.css';
+
+import { formatMessageTime } from '../../utils/timeUtils';
 
 const OrderStatus = () => {
   const [orders, setOrders] = useState([]);
@@ -11,19 +11,7 @@ const OrderStatus = () => {
   const [userName, setUserName] = useState('Guest');
 
   // Function to set a test user ID
-  const setTestUser = () => {
-    const testId = prompt("Enter test user ID (e.g., 1):");
-    const name = prompt("Enter your name:");
-    if (testId) {
-      localStorage.setItem('userId', testId);
-      if (name) {
-        localStorage.setItem('userName', name);
-        setUserName(name);
-      }
-      setUserId(testId);
-      fetchOrders(testId);
-    }
-  };
+  
 
   // Check backend connection
   const checkBackend = async () => {
@@ -258,12 +246,7 @@ const OrderStatus = () => {
 
       {/* Controls */}
       <div style={styles.controls}>
-        <button 
-          onClick={setTestUser} 
-          style={{...styles.button, ...styles.buttonTest}}
-        >
-          Set Test User
-        </button>
+        
         <button 
           onClick={refreshOrders} 
           style={{...styles.button, ...styles.buttonRefresh}}
@@ -273,17 +256,7 @@ const OrderStatus = () => {
       </div>
 
       {/* Backend Status */}
-      <div style={styles.backendStatus}>
-        <h3>Server Status:</h3>
-        <div style={
-          backendStatus === 'connected' ? styles.statusConnected :
-          backendStatus === 'not-responding' ? styles.statusNotResponding :
-          styles.statusChecking
-        }>
-          {getBackendStatusDisplay()}
-        </div>
-        <p>Backend URL: http://localhost:5001/orders/consumer/{userId || 'user_id'}</p>
-      </div>
+      
 
       {/* Orders List */}
       {loading ? (
@@ -301,8 +274,8 @@ const OrderStatus = () => {
               <h3>Order #{order.id}</h3>
               <p><strong>Farmer:</strong> {order.farmer_name || "Unknown Farmer"}</p>
               <p><strong>Status:</strong> <span style={getStatusStyle(order.status)}>{order.status}</span></p>
-              <p><strong>Total:</strong> ${order.total_price?.toFixed(2) || "0.00"}</p>
-              <p><strong>Date:</strong> {order.order_date || "Unknown date"}</p>
+              <p><strong>Total:</strong> {order.total_price?.toFixed(2) || "0.00"}</p>
+              <p><strong>Date:</strong> {order.order_date ? formatMessageTime(order.order_date) : "Unknown date"}</p>
               {order.items && order.items.length > 0 && (
                 <div style={styles.orderItems}>
                   <h4>Items:</h4>
@@ -320,28 +293,7 @@ const OrderStatus = () => {
         </div>
       )}
 
-      {/* Debug Info */}
-      <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
-        <button 
-          onClick={() => console.log({
-            userId,
-            orders,
-            backendStatus,
-            localStorageUserId: localStorage.getItem('userId'),
-            localStorageUserName: localStorage.getItem('userName')
-          })}
-          style={{
-            background: '#95a5a6',
-            color: 'white',
-            padding: '8px 15px',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Debug Info (Check Console)
-        </button>
-      </div>
+      
     </div>
   );
 };

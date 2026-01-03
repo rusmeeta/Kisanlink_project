@@ -305,9 +305,7 @@ const ProductCard = ({ product, addToCart }) => {
         <p className="text-xs text-gray-500 truncate">
           Location: <span className="font-semibold">{product.location || "N/A"}</span>
         </p>
-        <p className="text-xs text-gray-500 mb-2">
-          Distance: <span className="font-semibold">{product.distance}</span>
-        </p>
+        
 
         <div className="flex items-center justify-between mb-2">
           <p className="text-green-600 font-bold text-sm">Rs {product.price} / kg</p>

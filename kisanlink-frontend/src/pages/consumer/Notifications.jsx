@@ -152,7 +152,7 @@ const getNotificationIcon = (notification) => {
 // Format time
 const formatTime = (dateString) => {
   if (!dateString) return "";
-  const date = new Date(dateString);
+  const date = new Date(dateString+"Z");
   const now = new Date();
   const diffMs = now - date;
   const diffMins = Math.floor(diffMs / 60000);

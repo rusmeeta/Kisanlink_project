@@ -237,7 +237,7 @@ const FarmerChat = () => {
                       isFarmer ? "text-green-100" : "text-gray-500"
                     }`}>
                       <Clock className="w-3 h-3 mr-1" />
-                      {new Date(m.created_at).toLocaleTimeString([], {
+                      {new Date(m.created_at+"Z").toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}

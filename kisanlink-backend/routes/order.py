@@ -80,7 +80,7 @@ def get_farmer_orders(farmer_id):
                 "consumer_name": customer.fullname if customer else "Customer",
                 "total_price": float(order.total_price) if order.total_price else 0,
                 "status": order.status,
-                "order_date": order.order_date.strftime("%Y-%m-%d %H:%M") if order.order_date else ""
+                "order_date": order.order_date.isoformat() if order.order_date else None
             })
         
         return jsonify({"orders": orders_data})
@@ -158,7 +158,7 @@ def get_consumer_orders(consumer_id):
                     # Try to get farmer item info if needed
                     try:
                         # Import here to avoid circular imports
-                        from farmer_items import FarmerItem
+                        from models_farmer_items import FarmerItem
                         farmer_item = FarmerItem.query.get(oi.product_id)
                         
                         items.append({
@@ -184,7 +184,7 @@ def get_consumer_orders(consumer_id):
                 "farmer_name": farmer.fullname if farmer else "Farmer",
                 "total_price": float(order.total_price or 0),
                 "status": order.status,
-                "order_date": order.order_date.strftime("%Y-%m-%d %H:%M") if order.order_date else "",
+                "order_date": order.order_date.isoformat() if order.order_date else None,
                 "items": items
             })
         

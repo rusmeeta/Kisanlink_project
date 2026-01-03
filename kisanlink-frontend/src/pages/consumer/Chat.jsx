@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ChatBox from "../../components/chat/ChatBox";
+import { getCurrentNepalTime } from "../../utils/timeUtils";
 
 const Chat = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [farmerData, setFarmerData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentNepalTime, setCurrentNepalTime] = useState("");
 
   useEffect(() => {
     // Get farmer data from location state
@@ -25,6 +27,27 @@ const Chat = () => {
       return () => clearTimeout(timer);
     }
   }, [location.state, navigate]);
+
+  useEffect(() => {
+    // Update current Nepal time every second
+    const updateTime = () => {
+      const now = getCurrentNepalTime();
+      setCurrentNepalTime(
+        now.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+          timeZone: "Asia/Kathmandu",
+        })
+      );
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   if (loading) {
     return (
@@ -74,12 +97,17 @@ const Chat = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => navigate('/consumer/notifications')}
-              className="text-sm text-green-600 hover:text-green-800"
-            >
-              View Notifications
-            </button>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded">
+                Nepal Time: {currentNepalTime}
+              </div>
+              <button
+                onClick={() => navigate('/consumer/notifications')}
+                className="text-sm text-green-600 hover:text-green-800"
+              >
+                View Notifications
+              </button>
+            </div>
           </div>
         </div>
       </div>

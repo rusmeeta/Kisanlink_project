@@ -38,7 +38,7 @@
 
     const formatTimeAgo = (dateString) => {
       if (!dateString) return "Just now";
-      const date = new Date(dateString);
+      const date = new Date(dateString+'Z');
       const now = new Date();
       const diffMs = now - date;
       const diffMins = Math.floor(diffMs / 60000);

@@ -84,7 +84,7 @@ const Home = () => {
       if (data.success) {
         setAdminCredentials({
           email: "admin@kisanlink.com",
-          password: "admin123"
+          password: "@admin123"
         });
         alert("Default admin created! Use these credentials to login.");
       }
@@ -110,11 +110,12 @@ const Home = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              <button 
-                onClick={() => scrollToSection('about')}
+              
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
               >
-                About
+                Home
               </button>
               <button 
                 onClick={() => scrollToSection('how-it-works')}
@@ -122,12 +123,7 @@ const Home = () => {
               >
                 How It Works
               </button>
-              <button 
-                onClick={() => scrollToSection('products')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Products
-              </button>
+              
               <button 
                 onClick={() => scrollToSection('join')}
                 className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
@@ -144,7 +140,8 @@ const Home = () => {
                   <Shield size={16} className="mr-2" />
                   Admin
                 </button>
-                
+
+               
                 <Link
                   to="/login"
                   className="px-4 py-2 text-emerald-700 hover:text-emerald-800 font-medium transition-colors"
@@ -195,17 +192,7 @@ const Home = () => {
               </div>
 
               {/* Setup Button for First Time */}
-              <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-sm text-yellow-800 mb-2">
-                  First time? Create default admin account
-                </p>
-                <button
-                  onClick={setupDefaultAdmin}
-                  className="w-full py-2 bg-yellow-100 text-yellow-800 rounded-lg font-medium hover:bg-yellow-200 transition-colors"
-                >
-                  Create Default Admin
-                </button>
-              </div>
+              
 
               {/* Demo Credentials */}
               
@@ -455,33 +442,6 @@ const Home = () => {
                 Fresh produce delivered to your doorstep or available for pickup in Thimi
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Products Section */}
-      <section id="products" className="py-16 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              Popular in <span className="text-emerald-600">Thimi</span>
-            </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              Fresh produce currently available from our local farms
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {[
-              { name: "Fresh Vegetables", icon: "🥬", color: "bg-emerald-100" },
-              { name: "Seasonal Fruits", icon: "🍎", color: "bg-red-100" },
-              { name: "Organic Grains", icon: "🌾", color: "bg-amber-100" },
-            ].map((product, index) => (
-              <div key={index} className={`${product.color} rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300`}>
-                <div className="text-4xl mb-3">{product.icon}</div>
-                <h3 className="font-bold text-gray-900">{product.name}</h3>
-              </div>
-            ))}
           </div>
         </div>
       </section>

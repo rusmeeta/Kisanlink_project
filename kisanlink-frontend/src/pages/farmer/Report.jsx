@@ -241,28 +241,10 @@ function Report() {
         {/* Product Performance Section */}
         {productPerformance.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">Product Performance</h2>
-                <p className="text-gray-600 mt-1">Sales metrics and performance ratings</p>
-              </div>
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
+            
             
             {/* Product Performance Chart */}
-            <div className="h-80 mb-8">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={productPerformance.slice(0, 5)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" stroke="#666" />
-                  <YAxis stroke="#666" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="sales" name="Sales (Units)" radius={[4, 4, 0, 0]} fill="#2E7D32" />
-                  <Bar dataKey="stock" name="Current Stock" radius={[4, 4, 0, 0]} fill="#4CAF50" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            
 
             {/* Product Performance Table */}
             <div className="overflow-x-auto">
