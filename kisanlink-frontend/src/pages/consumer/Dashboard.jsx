@@ -161,6 +161,12 @@ const Dashboard = () => {
           >
             Cart ({cart.length})
           </Link>
+          <Link
+            to="/consumer/order-status"
+            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition"
+          >
+            Order Status
+          </Link>
 
           <Link
             to="/consumer/notifications"

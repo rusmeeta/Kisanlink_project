@@ -51,7 +51,7 @@ def get_messages(other_id):
             "receiver_name": receiver_info["fullname"] if receiver_info else f"User {m.receiver_id}",
             "receiver_email": receiver_info["email"] if receiver_info else "",
             "message": m.message,
-            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": m.created_at.isoformat()
         })
 
     return jsonify({
@@ -94,7 +94,7 @@ def send_message(other_id):
             "receiver_name": receiver_info["fullname"] if receiver_info else f"User {msg.receiver_id}",
             "receiver_email": receiver_info["email"] if receiver_info else "",
             "message": msg.message,
-            "created_at": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": msg.created_at.isoformat(),
         }
     })
 
@@ -159,7 +159,7 @@ def get_farmer_conversations():
                 "consumer_email": consumer.email,
                 "consumer_location": consumer.location,
                 "last_message": row[1],
-                "last_msg_time": row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else "",
+                "last_msg_time": row[2].isoformat() if row[2] else None,
                 "last_message_from_farmer": row[3] == user_id,
                 "unread_count": unread_count,
                 "total_messages": Message.query.filter(
@@ -238,7 +238,7 @@ def get_consumer_conversations():
                 "farmer_email": farmer.email,
                 "farmer_location": farmer.location,
                 "last_message": row[1],
-                "last_msg_time": row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else "",
+                "last_msg_time": row[2].isoformat() if row[2] else None,
                 "last_message_from_consumer": row[3] == user_id,
                 "unread_count": unread_count,
                 "total_messages": Message.query.filter(

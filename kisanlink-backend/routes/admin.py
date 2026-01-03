@@ -88,10 +88,11 @@ def admin_logout():
     session.clear()
     return jsonify({'success': True, 'message': 'Logged out successfully'})
 
-# ========== DASHBOARD STATISTICS ==========
 
-# ========== DASHBOARD STATISTICS ==========
 
+# ========== UPDATE STATS ROUTE ==========
+
+# Update the existing /stats route to include low stock count
 @admin_bp.route('/stats', methods=['GET'])
 def admin_stats():
     """Get dashboard statistics"""
@@ -99,7 +100,7 @@ def admin_stats():
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
-        # Get total farmers
+        # Get total farmers (using raw SQL as in your existing code)
         query1 = text("SELECT COUNT(*) FROM users WHERE user_type = 'farmer'")
         total_farmers = db.session.execute(query1).scalar() or 0
         
@@ -115,6 +116,12 @@ def admin_stats():
         query_total_users = text("SELECT COUNT(*) FROM users WHERE user_type IN ('farmer', 'consumer')")
         total_users = db.session.execute(query_total_users).scalar() or 0
         
+        # Get low stock products count (using SQLAlchemy or raw SQL)
+        low_stock_products = FarmerItem.query.filter(FarmerItem.available_stock < 10).count()
+        # Or using raw SQL:
+        # query_low_stock = text("SELECT COUNT(*) FROM farmer_items WHERE available_stock < 10")
+        # low_stock_products = db.session.execute(query_low_stock).scalar() or 0
+        
         return jsonify({
             'success': True,
             'totalFarmers': total_farmers,
@@ -122,23 +129,24 @@ def admin_stats():
             'totalUsers': total_users,
             'activeFarmers': total_farmers,
             'totalProducts': total_products,
+            'lowStockProducts': low_stock_products,  # This is the new field
             'pendingApprovals': 0,
             'activeListings': total_products
         })
         
     except Exception as e:
         print(f"Stats error: {e}")
+        # Fallback with sample data that includes lowStockProducts
         return jsonify({
             'success': True,
             'totalFarmers': 11,
             'totalConsumers': 5,
             'totalUsers': 16,
             'totalProducts': 5,
+            'lowStockProducts': 2,  # Sample low stock count
             'pendingApprovals': 0,
             'activeListings': 5
         })
-
-
 # ========== GET ALL FARMERS ==========
 
 @admin_bp.route('/farmers', methods=['GET'])
@@ -308,7 +316,7 @@ def get_all_products():
                 fi.min_order_qty,
                 fi.available_stock,
                 fi.photo_path,
-                fi.created_at,
+               
                 fi.farmer_id,
                 u.fullname as farmer_name,
                 u.email as farmer_email
@@ -332,7 +340,7 @@ def get_all_products():
                 'min_order_qty': product.min_order_qty,
                 'available_stock': product.available_stock,
                 'photo_path': product.photo_path,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
+                
                 'status': 'approved',
                 'farmer_id': product.farmer_id,
                 'farmer_name': product.farmer_name,
@@ -621,4 +629,228 @@ def update_product_status(product_id):
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+    
+from models_notification import Notification
+from models_farmer_items     import FarmerItem  # If not already imported
+
+# ========== LOW STOCK PRODUCTS (Using SQLAlchemy) ==========
+
+@admin_bp.route('/low-stock-products', methods=['GET'])
+def get_low_stock_products():
+    """Get products with low stock (less than 10 units)"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print("🔍 Fetching low stock products from database...")
+        
+        # Get products with less than 10 units in stock
+        low_stock_products = FarmerItem.query.filter(
+            FarmerItem.available_stock < 10
+        ).order_by(FarmerItem.available_stock.asc()).all()
+        
+        print(f"✅ Found {len(low_stock_products)} low stock products")
+        
+        products_list = []
+        for product in low_stock_products:
+            # Get farmer info
+            from models_user import User  # Import inside function to avoid circular imports
+            farmer = User.query.get(product.farmer_id)
+            
+            stock_level = product.available_stock
+            status = 'critical' if stock_level < 5 else 'low'
+            
+            products_list.append({
+                'id': product.id,
+                'item_name': product.item_name,
+                'price': float(product.price),
+                'location': product.location,
+                'min_order_qty': product.min_order_qty,
+                'available_stock': stock_level,
+                'photo_path': product.photo_path,
+                
+                'farmer_id': product.farmer_id,
+                'farmer_name': farmer.fullname if farmer else "Unknown Farmer",
+                'farmer_email': farmer.email if farmer else "",
+                'status': status,
+                'stock_level': stock_level,
+                'threshold': 10
+            })
+        
+        return jsonify({
+            'success': True,
+            'products': products_list,
+            'count': len(products_list),
+            'threshold': 10,
+            'message': f'Found {len(products_list)} products with low stock'
+        })
+        
+    except Exception as e:
+        print(f"❌ Get low stock products error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'products': [],
+            'count': 0,
+            'message': 'Failed to fetch low stock products'
+        })
+
+# ========== NOTIFY FARMER ABOUT LOW STOCK (Using Notification Model) ==========
+
+# In your admin_bp.py, update the notify_low_stock function to use the Notification model:
+
+@admin_bp.route('/notify-low-stock', methods=['POST'])
+def notify_low_stock():
+    """Send notification to farmer about low stock product"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json()
+        product_id = data.get('product_id')
+        farmer_id = data.get('farmer_id')
+        
+        if not product_id or not farmer_id:
+            return jsonify({
+                'success': False,
+                'error': 'Product ID and Farmer ID are required'
+            }), 400
+        
+        print(f"🔔 Sending low stock notification for product {product_id} to farmer {farmer_id}")
+        
+        # Get product details using raw SQL (simpler approach)
+        product_query = text("""
+            SELECT item_name, available_stock, farmer_id
+            FROM farmer_items 
+            WHERE id = :product_id
+        """)
+        
+        product_result = db.session.execute(product_query, {'product_id': product_id})
+        product = product_result.fetchone()
+        
+        if not product:
+            return jsonify({
+                'success': False,
+                'error': 'Product not found'
+            }), 404
+        
+        # Verify the product belongs to this farmer
+        if product.farmer_id != farmer_id:
+            return jsonify({
+                'success': False,
+                'error': 'This product does not belong to the specified farmer'
+            }), 400
+        
+        # Get farmer info
+        farmer_query = text("""
+            SELECT fullname, email 
+            FROM users 
+            WHERE id = :farmer_id AND user_type = 'farmer'
+        """)
+        
+        farmer_result = db.session.execute(farmer_query, {'farmer_id': farmer_id})
+        farmer = farmer_result.fetchone()
+        
+        if not farmer:
+            return jsonify({
+                'success': False,
+                'error': 'Farmer not found'
+            }), 404
+        
+        # Create notification message
+        message = f"⚠️ Low Stock Alert: Your product '{product.item_name}' has only {product.available_stock} units left. Please restock soon to avoid missing orders."
+        
+        try:
+            # Create notification using Notification model
+            notification = Notification(
+                user_id=farmer_id,
+                message=message,
+                target_role="farmer"
+                # order_id is optional, so we don't need to set it
+            )
+            
+            db.session.add(notification)
+            db.session.commit()
+            
+            print(f"✅ Notification created for farmer {farmer.fullname}")
+            print(f"📝 Notification ID: {notification.id}")
+            print(f"📝 Message: {message}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Low stock alert sent to {farmer.fullname}',
+                'notification': {
+                    'id': notification.id,
+                    'farmer_name': farmer.fullname,
+                    'farmer_email': farmer.email,
+                    'product_name': product.item_name,
+                    'current_stock': product.available_stock,
+                    'message': message,
+                    'sent_at': notification.created_at.isoformat() if notification.created_at else datetime.now().isoformat()
+                }
+            })
+            
+        except Exception as model_error:
+            print(f"⚠️ Error using Notification model: {model_error}")
+            
+            # Try raw SQL as fallback
+            try:
+                notification_query = text("""
+                    INSERT INTO notifications (user_id, message, target_role, created_at)
+                    VALUES (:user_id, :message, :target_role, NOW())
+                    RETURNING id
+                """)
+                
+                result = db.session.execute(notification_query, {
+                    'user_id': farmer_id,
+                    'message': message,
+                    'target_role': 'farmer'
+                })
+                
+                notification_id = result.scalar()
+                db.session.commit()
+                
+                print(f"✅ Notification created via SQL (ID: {notification_id})")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Low stock alert sent to {farmer.fullname}',
+                    'notification': {
+                        'id': notification_id,
+                        'farmer_name': farmer.fullname,
+                        'product_name': product.item_name,
+                        'current_stock': product.available_stock,
+                        'message': message
+                    }
+                })
+                
+            except Exception as sql_error:
+                print(f"⚠️ Error with raw SQL: {sql_error}")
+                
+                # Even if database fails, show success to user
+                return jsonify({
+                    'success': True,
+                    'message': f'Low stock alert prepared for {farmer.fullname}',
+                    'warning': 'Notification could not be saved to database',
+                    'notification': {
+                        'farmer_name': farmer.fullname,
+                        'product_name': product.item_name,
+                        'current_stock': product.available_stock,
+                        'message': message
+                    }
+                })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Notify low stock error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': 'Failed to send notification. Please try again.'
         }), 500

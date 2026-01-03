@@ -109,6 +109,8 @@ if not (email_user and email_pass):
     print("   Some features may not work properly")
     print("   Check terminal for verification links instead")
 
+    
+
 # Import your other modules
 from config import Config
 from extensions import db

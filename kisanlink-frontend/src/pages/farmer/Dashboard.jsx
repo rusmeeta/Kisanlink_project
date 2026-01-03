@@ -1,9 +1,9 @@
-// src/pages/farmer/Dashboard.jsx - UPDATED (Fetch real product count from database)
+// src/pages/farmer/Dashboard.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
-  Package, ShoppingCart, Clock
+  Package, ShoppingCart, Clock, Truck, CheckCircle
 } from "lucide-react";
 
 const FarmerDashboard = () => {
@@ -11,10 +11,12 @@ const FarmerDashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]); // NEW: For orders
   const [stats, setStats] = useState({
     totalProducts: 0,
     totalOrders: 0,
-    pendingNotifications: 0
+    pendingNotifications: 0,
+    pendingOrders: 0 // NEW
   });
   const [unreadCounts, setUnreadCounts] = useState({
     notifications: 0,
@@ -24,22 +26,20 @@ const FarmerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Get current active tab from URL
   const getActiveTab = () => {
     const path = location.pathname;
     if (path.includes('/farmer/add-product')) return 'addProduct';
     if (path.includes('/farmer/products')) return 'productList';
     if (path.includes('/farmer/report')) return 'reports';
     if (path.includes('/farmer/notifications')) return 'notifications';
-    return 'dashboard'; // default
+    if (path.includes('/farmer/orders')) return 'orders';
+    return 'dashboard';
   };
 
   const activeTab = getActiveTab();
-
-  // Real-time polling interval (10 seconds)
   const POLL_INTERVAL = 10000;
 
-  // Fetch all farmer data
+  // Fetch farmer data
   const fetchFarmerData = async () => {
     try {
       const res = await fetch("http://localhost:5001/farmer/me", {
@@ -55,7 +55,65 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch notifications from database
+  // NEW: Fetch recent orders
+  const fetchRecentOrders = async () => {
+    try {
+      const farmerId = localStorage.getItem("userId");
+      if (!farmerId) return;
+
+      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.orders) {
+          setRecentOrders(data.orders);
+          
+          // Count pending orders
+          const pending = data.orders.filter(o => o.status === 'placed').length;
+          setStats(prev => ({
+            ...prev,
+            pendingOrders: pending
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+    }
+  };
+
+  // Update order status
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const farmerId = localStorage.getItem("userId");
+      
+      const response = await fetch("http://localhost:5001/orders/update-status", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: "include",
+        body: JSON.stringify({
+          order_id: orderId,
+          farmer_id: farmerId,
+          new_status: newStatus
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Refresh orders after update
+          fetchRecentOrders();
+          alert(`✅ Order status updated to ${newStatus}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      alert("Failed to update order status");
+    }
+  };
+
+  // Fetch notifications
   const fetchNotifications = async () => {
     try {
       const res = await fetch("http://localhost:5001/notifications", {
@@ -90,7 +148,6 @@ const FarmerDashboard = () => {
           const conversations = data.conversations || [];
           setMessages(conversations);
           
-          // Count unread messages
           const unreadCount = conversations.reduce((count, conv) => {
             return count + (conv.unread_count || 0);
           }, 0);
@@ -108,7 +165,7 @@ const FarmerDashboard = () => {
     if (!user) return;
 
     try {
-      // Fetch products count from farmer_items table for this farmer
+      // Fetch products count
       const productsRes = await fetch("http://localhost:5001/farmer/products", {
         credentials: "include",
       });
@@ -116,19 +173,15 @@ const FarmerDashboard = () => {
       if (productsRes.ok) {
         const productsData = await productsRes.json();
         const productCount = productsData.products?.length || 0;
-        console.log(`Farmer ${user.id} has ${productCount} products`);
         
         setStats(prev => ({
           ...prev,
           totalProducts: productCount
         }));
-      } else {
-        console.error("Failed to fetch products:", productsRes.status);
       }
 
-      // Fetch orders count - similar to report.jsx logic
+      // Fetch total orders count
       try {
-        // First try the orders endpoint from report.jsx
         const ordersRes = await fetch(`http://localhost:5001/api/farmer/report/${user.id}`, {
           credentials: "include",
         });
@@ -136,32 +189,14 @@ const FarmerDashboard = () => {
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           const orderCount = ordersData.summary?.totalOrders || 0;
-          console.log(`Orders from report API: ${orderCount}`);
           
           setStats(prev => ({
             ...prev,
             totalOrders: orderCount
           }));
-        } else {
-          // Fallback to orders count endpoint
-          const fallbackRes = await fetch(`http://localhost:5001/orders/farmer/${user.id}/count`, {
-            credentials: "include",
-          });
-          
-          if (fallbackRes.ok) {
-            const fallbackData = await fallbackRes.json();
-            const fallbackCount = fallbackData.count || 0;
-            console.log(`Orders from fallback API: ${fallbackCount}`);
-            
-            setStats(prev => ({
-              ...prev,
-              totalOrders: fallbackCount
-            }));
-          }
         }
       } catch (orderErr) {
         console.error("Error fetching orders:", orderErr);
-        // Set default if API fails
         setStats(prev => ({
           ...prev,
           totalOrders: 0
@@ -173,7 +208,7 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch recent activities (get 3 latest notifications)
+  // Fetch recent activities
   const fetchRecentActivities = async () => {
     try {
       const res = await fetch("http://localhost:5001/notifications", {
@@ -185,9 +220,8 @@ const FarmerDashboard = () => {
         const data = await res.json();
         const notifs = data.notifications || [];
         
-        // Take only 3 most recent notifications
         const recentActivitiesData = notifs
-          .slice(0, 3) // Get first 3
+          .slice(0, 3)
           .map((notif, idx) => ({
             id: notif.id || idx + 1,
             type: getActivityType(notif),
@@ -205,7 +239,7 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Helper: Determine activity type from notification
+  // Helper functions
   const getActivityType = (notification) => {
     if (notification.order_id) return "order";
     if (notification.farmer_id) return "message";
@@ -213,7 +247,6 @@ const FarmerDashboard = () => {
     return "system";
   };
 
-  // Helper function to get status from message
   const getStatusFromMessage = (message) => {
     const msg = message.toLowerCase();
     if (msg.includes('delivered') || msg.includes('completed')) return 'delivered';
@@ -223,7 +256,6 @@ const FarmerDashboard = () => {
     return 'info';
   };
 
-  // Helper: Format time ago
   const formatTimeAgo = (dateString) => {
     if (!dateString) return "Just now";
     const date = new Date(dateString);
@@ -247,12 +279,14 @@ const FarmerDashboard = () => {
     fetchMessages();
     fetchStats();
     fetchRecentActivities();
+    fetchRecentOrders(); // NEW: Fetch orders
   }, []);
 
-  // Update stats when user data is loaded
+  // Update when user data is loaded
   useEffect(() => {
     if (user) {
       fetchStats();
+      fetchRecentOrders();
     }
   }, [user]);
 
@@ -264,6 +298,7 @@ const FarmerDashboard = () => {
         fetchMessages();
         fetchStats();
         fetchRecentActivities();
+        fetchRecentOrders(); // NEW: Poll orders too
       }
     }, POLL_INTERVAL);
 
@@ -282,11 +317,12 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Sidebar navigation items
+  // Sidebar navigation items - WITH ORDERS
   const navItems = [
     { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
     { id: "addProduct", label: "Add Product", path: "/farmer/add-product" },
     { id: "productList", label: "Product List", path: "/farmer/products" },
+    { id: "orders", label: "Orders", path: "/farmer/orders" }, // NEW
     { id: "reports", label: "Reports", path: "/farmer/report" },
     { id: "notifications", label: `Notifications (${unreadCounts.notifications})`, path: "/farmer/notifications" },
   ];
@@ -318,7 +354,7 @@ const FarmerDashboard = () => {
             </Link>
           ))}
           
-          {/* Messages as separate Link */}
+          {/* Messages */}
           <Link
             to="/farmer/messages"
             className="block w-full text-left px-4 py-2 rounded-lg font-semibold transition text-gray-700 hover:bg-green-100 relative"
@@ -333,7 +369,7 @@ const FarmerDashboard = () => {
         </nav>
       </aside>
 
-      {/* Main Content - Use Outlet for nested routes */}
+      {/* Main Content */}
       <main className="flex-1 p-8 overflow-y-auto">
         {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
@@ -342,7 +378,7 @@ const FarmerDashboard = () => {
           </h1>
 
           <div className="flex items-center space-x-4">
-            {/* Notifications - Link */}
+            {/* Notifications */}
             <Link
               to="/farmer/notifications"
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
@@ -356,7 +392,7 @@ const FarmerDashboard = () => {
               )}
             </Link>
 
-            {/* Messages - Link */}
+            {/* Messages */}
             <Link
               to="/farmer/messages"
               className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
@@ -380,7 +416,7 @@ const FarmerDashboard = () => {
           </div>
         </div>
 
-        {/* Render Dashboard content OR nested routes */}
+        {/* Render Dashboard content */}
         {activeTab === "dashboard" && user ? (
           <div className="space-y-8">
             {/* Farmer Info Card */}
@@ -409,25 +445,25 @@ const FarmerDashboard = () => {
                   <Package size={16} />
                   <span>Add Product</span>
                 </Link>
-                <button
-                  onClick={() => window.alert("Edit profile feature coming soon!")}
-                  className="flex items-center space-x-1 bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 transition"
+                <Link
+                  to="/farmer/orders"
+                  className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition"
                 >
-                  <Edit3 size={16} />
-                  <span>Edit Profile</span>
-                </button>
+                  <ShoppingCart size={16} />
+                  <span>View Orders</span>
+                </Link>
               </div>
             </div>
 
-            {/* Stats Grid - Only 3 cards (removed Customers card) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
                 <div className="flex items-center justify-between mb-3">
                   <Package className="w-8 h-8 text-green-600" />
-                  <span className="text-sm text-gray-500">Total Products</span>
+                  <span className="text-sm text-gray-500">Products</span>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.totalProducts}</h3>
-                <p className="text-sm text-gray-600 mt-1">Items in your inventory</p>
+                <p className="text-sm text-gray-600 mt-1">Total products</p>
               </div>
 
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
@@ -436,20 +472,103 @@ const FarmerDashboard = () => {
                   <span className="text-sm text-gray-500">Total Orders</span>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.totalOrders}</h3>
-                <p className="text-sm text-gray-600 mt-1">Orders received</p>
+                <p className="text-sm text-gray-600 mt-1">All orders</p>
               </div>
 
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
                 <div className="flex items-center justify-between mb-3">
-                  <Bell className="w-8 h-8 text-yellow-600" />
-                  <span className="text-sm text-gray-500">Pending Alerts</span>
+                  <Clock className="w-8 h-8 text-yellow-600" />
+                  <span className="text-sm text-gray-500">New Orders</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800">{stats.pendingOrders}</h3>
+                <p className="text-sm text-gray-600 mt-1">Awaiting action</p>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
+                <div className="flex items-center justify-between mb-3">
+                  <Bell className="w-8 h-8 text-purple-600" />
+                  <span className="text-sm text-gray-500">Alerts</span>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.pendingNotifications}</h3>
                 <p className="text-sm text-gray-600 mt-1">Unread notifications</p>
               </div>
             </div>
 
-            {/* Recent Activities - Shows 3 latest notifications */}
+            {/* Recent Orders Section */}
+            {recentOrders.length > 0 && (
+              <div className="bg-white rounded-2xl shadow p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-gray-800">Recent Orders</h2>
+                  <Link 
+                    to="/farmer/orders"
+                    className="text-green-600 hover:text-green-700 font-medium"
+                  >
+                    View All →
+                  </Link>
+                </div>
+
+                <div className="space-y-4">
+                  {recentOrders.slice(0, 3).map((order) => (
+                    <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          order.status === 'placed' ? 'bg-blue-100' :
+                          order.status === 'preparing' ? 'bg-yellow-100' :
+                          'bg-green-100'
+                        }`}>
+                          <span className="text-lg">
+                            {order.status === 'placed' ? '🛒' :
+                             order.status === 'preparing' ? '👨‍🌾' : '✅'}
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-800">
+                            Order #{order.id} • ₹{order.total_price}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {order.consumer_name || `Customer ${order.consumer_id}`}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatTimeAgo(order.order_date)}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          order.status === 'placed' ? 'bg-blue-100 text-blue-800' :
+                          order.status === 'preparing' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {order.status.toUpperCase()}
+                        </span>
+                        
+                        {/* Simple Status Update Buttons */}
+                        {order.status === 'placed' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'preparing')}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Start Preparing
+                          </button>
+                        )}
+                        
+                        {order.status === 'preparing' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'ready')}
+                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Mark Ready
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recent Activities */}
             <div className="bg-white rounded-2xl shadow p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-gray-800">Recent Activities</h2>
@@ -460,8 +579,7 @@ const FarmerDashboard = () => {
                 {recentActivities.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-gray-400 text-4xl mb-4">📋</div>
-                    <p className="text-gray-500">No recent activities yet</p>
-                    <p className="text-sm text-gray-400 mt-2">Your activities will appear here</p>
+                    <p className="text-gray-500">No recent activities</p>
                   </div>
                 ) : (
                   recentActivities.map((activity) => (
@@ -490,11 +608,6 @@ const FarmerDashboard = () => {
                             <span className="text-xs px-2 py-1 rounded-full capitalize bg-gray-200 text-gray-700">
                               {activity.type}
                             </span>
-                            {activity.priority === 'high' && (
-                              <span className="ml-2 text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
-                                New
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -510,7 +623,7 @@ const FarmerDashboard = () => {
               </div>
             </div>
 
-            {/* Quick Actions - Simplified */}
+            {/* Quick Actions */}
             <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-green-800 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -519,27 +632,27 @@ const FarmerDashboard = () => {
                   className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex flex-col items-center justify-center text-center"
                 >
                   <Package className="w-6 h-6 mb-2" />
-                  <span className="font-medium">Add New Product</span>
+                  <span className="font-medium">Add Product</span>
+                </Link>
+                <Link
+                  to="/farmer/orders"
+                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
+                >
+                  <ShoppingCart className="w-6 h-6 mb-2" />
+                  <span className="font-medium">Manage Orders</span>
                 </Link>
                 <Link
                   to="/farmer/messages"
                   className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
                 >
                   <MessageCircle className="w-6 h-6 mb-2" />
-                  <span className="font-medium">Check Messages</span>
-                </Link>
-                <Link
-                  to="/farmer/report"
-                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
-                >
-                  <Bell className="w-6 h-6 mb-2" />
-                  <span className="font-medium">View Reports</span>
+                  <span className="font-medium">Messages</span>
                 </Link>
               </div>
             </div>
           </div>
         ) : (
-          // Render nested routes (AddProduct, ProductList, Reports, etc.)
+          // Render nested routes
           <Outlet />
         )}
       </main>

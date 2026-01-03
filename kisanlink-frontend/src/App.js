@@ -15,6 +15,8 @@ import Report from "./pages/farmer/Report";
 import FarmerMessages from "./pages/farmer/Messages";
 import FarmerNotifications from "./pages/farmer/Notifications";
 import FarmerChat from "./pages/farmer/FarmerChat";
+import FarmerOrdersPage from "./pages/farmer/Orders"; // ✅ ADD THIS IMPORT
+
 
 // Consumer pages
 import ConsumerDashboard from "./pages/consumer/Dashboard";
@@ -23,18 +25,17 @@ import Messages from "./pages/consumer/Messages";
 import Notifications from "./pages/consumer/Notifications";
 import ConsumerChat from "./pages/consumer/ConsumerChat";
 import ChatWithFarmer from "./pages/consumer/ChatWithFarmer";
+import OrderStatus from "./pages/consumer/OrderStatus";
 
-// ========== ADD THESE ADMIN IMPORTS ==========
+// Admin pages
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/Dashboard";
 import FarmersManagement from "./pages/admin/FarmersManagement";
 import ProductsManagement from "./pages/admin/ProductsManagement";
 import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
-// =============================================
 
 import VerificationSuccess from "./pages/VerificationSuccess";
-// Import ProtectedRoute
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -82,6 +83,11 @@ function App() {
             <FarmerChat />
           </ProtectedRoute>
         } />
+        <Route path="/farmer/orders" element={ // ✅ ADD THIS ROUTE
+          <ProtectedRoute allowedUserType="farmer">
+            <FarmerOrdersPage />
+          </ProtectedRoute>
+        } />
 
         {/* Consumer pages - Only consumers can access */}
         <Route path="/consumer/dashboard" element={
@@ -109,22 +115,19 @@ function App() {
             <ConsumerChat />
           </ProtectedRoute>
         } />
-
         <Route path="/consumer/messages/:farmerId" element={<ChatWithFarmer />} />
 
-        {/* ========== ADD THESE ADMIN ROUTES ========== */}
-        // In App.jsx
+        {/* Admin pages */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/farmers" element={<FarmersManagement />} />
         <Route path="/admin/products" element={<ProductsManagement />} />
         <Route path="/admin/consumers" element={<ConsumersManagement />} />
-        
-
         <Route path="/admin/dashboard" element={<TestDashboard />} />
-        {/* ============================================ */}
 
-         <Route path="/verification-success" element={<VerificationSuccess />} />
+        <Route path="/verification-success" element={<VerificationSuccess />} />
+        // In your App.jsx or router file
+        <Route path="/consumer/order-status" element={<OrderStatus />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

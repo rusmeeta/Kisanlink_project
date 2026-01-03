@@ -9,11 +9,17 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     consumer_id = db.Column(db.Integer, nullable=False)
     farmer_id = db.Column(db.Integer, nullable=False)
-    item_id = db.Column(db.Integer, nullable=False)  # make sure this exists
+    item_id = db.Column(db.Integer, nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     total_price = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), default="placed")
     order_date = db.Column(db.DateTime, default=db.func.now())
+    status_updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def update_status(self, new_status):
+        self.status = new_status
+        self.status_updated_at = datetime.utcnow()
+
 
 
 class OrderItem(db.Model):
@@ -21,6 +27,8 @@ class OrderItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=False)
-    product_id = db.Column(db.Integer, nullable=False)
+    # product_id = db.Column(db.Integer, nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False)
+
+    
