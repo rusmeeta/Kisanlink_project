@@ -441,7 +441,7 @@ def get_products():
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, item_name, price, photo_path, location, min_order_qty, available_stock, latitude, longitude
+            SELECT id, item_name, price, photo_path, location, min_order_qty, available_stock,status, latitude, longitude
             FROM farmer_items
             WHERE farmer_id=%s
         """, (farmer_id,))
@@ -459,8 +459,9 @@ def get_products():
                 "location": r[4],
                 "min_order_qty": r[5],
                 "available_stock": r[6],
-                "latitude": r[7],
-                "longitude": r[8]
+                "status":r[7],
+                "latitude": r[8],
+                "longitude": r[9]
             } for r in rows
         ]
 

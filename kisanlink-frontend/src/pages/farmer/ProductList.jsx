@@ -7,30 +7,47 @@ import {
   X, 
   Image as ImageIcon,
   Package,
-  
   MapPin,
-  PackageCheck,
-  Box
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Filter,
+  Search,
+  Clock,
+  Eye,
+  AlertCircle
 } from "lucide-react";
 
-const ProductList = () => {
+const ProductList = ({ isAdmin = false }) => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [newPhoto, setNewPhoto] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
+  // Fetch products
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5001/farmer/products", {
-        withCredentials: true,
-      });
-      setProducts(res.data.products);
+      const url = isAdmin 
+        ? "http://localhost:5001/admin/products"
+        : "http://localhost:5001/farmer/products";
+      
+      const res = await axios.get(url, { withCredentials: true });
+      
+      const fetchedProducts = res.data.products || [];
+      console.log("Fetched products:", fetchedProducts);
+      
+      setProducts(fetchedProducts);
+      setFilteredProducts(fetchedProducts);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch error:", err);
       alert("Error fetching products");
     } finally {
       setLoading(false);
@@ -39,16 +56,47 @@ const ProductList = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [isAdmin]);
+
+  // Filter products based on search and status
+  useEffect(() => {
+    let filtered = products;
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(product =>
+        product.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.farmer_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (product.location?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(product => product.status === statusFilter);
+    }
+    
+    setFilteredProducts(filtered);
+  }, [products, searchTerm, statusFilter]);
+
+  // Count products by status
+  const countByStatus = (status) => {
+    return products.filter(p => p.status === status).length;
+  };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
-
     try {
-      await axios.delete(`http://localhost:5001/farmer/delete-product/${id}`, {
-        withCredentials: true,
-      });
+      if (isAdmin) {
+        await axios.delete(`http://localhost:5001/admin/products/${id}/force-delete`, {
+          withCredentials: true,
+        });
+      } else {
+        await axios.delete(`http://localhost:5001/farmer/delete-product/${id}`, {
+          withCredentials: true,
+        });
+      }
       fetchProducts();
+      setShowDeleteConfirm(null);
     } catch (err) {
       console.error(err);
       alert("Error deleting product");
@@ -57,7 +105,7 @@ const ProductList = () => {
 
   const handleEditClick = (product) => {
     setEditingId(product.id);
-    setEditForm(product);
+    setEditForm({ ...product });
     setNewPhoto(null);
     setPreviewPhoto(
       product.photo_path
@@ -82,38 +130,84 @@ const ProductList = () => {
       );
   };
 
+  // Farmer update
   const handleUpdate = async (id) => {
-    setIsUpdating(true);
-    try {
-      const formData = new FormData();
-      formData.append("item_name", editForm.item_name);
-      formData.append("price", editForm.price);
-      formData.append("location", editForm.location);
-      formData.append("min_order_qty", editForm.min_order_qty);
-      formData.append("available_stock", editForm.available_stock);
+    if (!isAdmin) {
+      setIsUpdating(true);
+      try {
+        const formData = new FormData();
+        formData.append("item_name", editForm.item_name);
+        formData.append("price", editForm.price);
+        formData.append("location", editForm.location);
+        formData.append("min_order_qty", editForm.min_order_qty);
+        formData.append("available_stock", editForm.available_stock);
 
-      if (newPhoto) formData.append("photo", newPhoto);
+        if (newPhoto) formData.append("photo", newPhoto);
 
-      const res = await axios.put(
-        `http://localhost:5001/farmer/update-product/${id}`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-          withCredentials: true,
-        }
-      );
+        const res = await axios.put(
+          `http://localhost:5001/farmer/update-product/${id}`,
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+            withCredentials: true,
+          }
+        );
 
-      alert(res.data.message);
-      setEditingId(null);
-      setNewPhoto(null);
-      setPreviewPhoto(null);
-      fetchProducts();
-    } catch (err) {
-      console.error("Update error:", err.response?.data || err);
-      alert(err.response?.data?.error || "Error updating product");
-    } finally {
-      setIsUpdating(false);
+        alert(res.data.message);
+        setEditingId(null);
+        setNewPhoto(null);
+        setPreviewPhoto(null);
+        fetchProducts();
+      } catch (err) {
+        console.error("Update error:", err.response?.data || err);
+        alert(err.response?.data?.error || "Error updating product");
+      } finally {
+        setIsUpdating(false);
+      }
     }
+  };
+
+  // Status badge component
+  const StatusBadge = ({ status, rejectionReason }) => {
+    const statusConfig = {
+      approved: { 
+        color: "bg-green-100 text-green-800", 
+        icon: <CheckCircle size={14} className="mr-1" />, 
+        label: "Approved" 
+      },
+      pending_approval: { 
+        color: "bg-yellow-100 text-yellow-800", 
+        icon: <Clock size={14} className="mr-1" />, 
+        label: "Pending Approval" 
+      },
+      rejected: { 
+        color: "bg-red-100 text-red-800", 
+        icon: <XCircle size={14} className="mr-1" />, 
+        label: "Rejected" 
+      },
+      pending: { 
+        color: "bg-yellow-100 text-yellow-800", 
+        icon: <Clock size={14} className="mr-1" />, 
+        label: "Pending" 
+      }
+    };
+    
+    const config = statusConfig[status] || statusConfig.pending;
+    
+    return (
+      <div>
+        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
+          {config.icon}
+          <span>{config.label}</span>
+        </span>
+        {rejectionReason && status === 'rejected' && (
+          <div className="mt-1 text-xs text-red-600 max-w-[150px] truncate" title={rejectionReason}>
+            <AlertCircle size={10} className="inline mr-1" />
+            {rejectionReason}
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -126,19 +220,86 @@ const ProductList = () => {
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-6">
-      <div className="flex items-center justify-between mb-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-800">Your Products</h2>
-          <p className="text-gray-500 mt-1">Manage your listed products here</p>
+          <h2 className="text-3xl font-bold text-gray-800">
+            {isAdmin ? "All Products" : "Your Products"}
+          </h2>
+          <p className="text-gray-500 mt-1">
+            {isAdmin ? "Manage all platform products" : "Manage your listed products here"}
+          </p>
         </div>
-        <div className="flex items-center space-x-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg">
-          <Package size={20} />
-          <span className="font-semibold">{products.length} Products</span>
+        
+        <div className="flex items-center space-x-4">
+          {isAdmin && (
+            <div className="flex items-center space-x-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
+              <Package size={20} />
+              <span className="font-semibold">Admin Mode</span>
+            </div>
+          )}
+          <div className="flex items-center space-x-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg">
+            <Package size={20} />
+            <span className="font-semibold">{filteredProducts.length} Products</span>
+          </div>
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+        </div>
+
+        {/* Status Filter */}
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none"
+          >
+            <option value="all">All Status</option>
+            <option value="approved">Approved</option>
+            <option value="pending_approval">Pending Approval</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+
+        {/* Stats Summary */}
+        <div className="flex items-center space-x-4 text-sm">
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+            <span className="text-gray-600">
+              {countByStatus('approved')} Approved
+            </span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></div>
+            <span className="text-gray-600">
+              {countByStatus('pending_approval')} Pending
+            </span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+            <span className="text-gray-600">
+              {countByStatus('rejected')} Rejected
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Products Table */}
       <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="w-full">
+        <table className="w-full min-w-[1000px]">
           <thead className="bg-gray-50">
             <tr>
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
@@ -150,29 +311,22 @@ const ProductList = () => {
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                 Product Name
               </th>
+              {isAdmin && (
+                <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
+                  Farmer
+                </th>
+              )}
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                <div className="flex items-center">
-                  
-                  Price
-                </div>
+                Price
               </th>
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                <div className="flex items-center">
-                  <MapPin size={16} className="mr-2" />
-                  Location
-                </div>
+                Location
               </th>
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                <div className="flex items-center">
-                  <PackageCheck size={16} className="mr-2" />
-                  Min Qty
-                </div>
+                Stock
               </th>
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
-                <div className="flex items-center">
-                  <Box size={16} className="mr-2" />
-                  Stock
-                </div>
+                Status
               </th>
               <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">
                 Actions
@@ -180,28 +334,33 @@ const ProductList = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {products.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan="7" className="py-12 text-center">
+                <td colSpan={isAdmin ? 8 : 7} className="py-12 text-center">
                   <div className="text-gray-400">
                     <Package size={48} className="mx-auto mb-4 opacity-30" />
                     <p className="text-lg font-medium">No products found</p>
-                    <p className="text-sm">Start by adding your first product</p>
+                    <p className="text-sm">
+                      {searchTerm ? "Try different search terms" : "No products available"}
+                    </p>
                   </div>
                 </td>
               </tr>
             ) : (
-              products.map((p) => (
+              filteredProducts.map((product) => (
                 <tr 
-                  key={p.id} 
+                  key={product.id} 
                   className={`hover:bg-gray-50 transition-colors ${
-                    editingId === p.id ? "bg-blue-50" : ""
+                    editingId === product.id ? "bg-blue-50" : ""
+                  } ${
+                    product.status === 'rejected' ? 'bg-red-50/30' : 
+                    product.status === 'pending_approval' ? 'bg-yellow-50/30' : ''
                   }`}
                 >
                   {/* Photo Column */}
                   <td className="py-4 px-6">
                     <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-                      {editingId === p.id ? (
+                      {editingId === product.id ? (
                         previewPhoto ? (
                           <img 
                             src={previewPhoto} 
@@ -213,11 +372,15 @@ const ProductList = () => {
                             <ImageIcon size={24} className="text-gray-400" />
                           </div>
                         )
-                      ) : p.photo_path ? (
+                      ) : product.photo_path ? (
                         <img
-                          src={`http://localhost:5001/uploads/${p.photo_path}`}
-                          alt={p.item_name}
+                          src={`http://localhost:5001/uploads/${product.photo_path}`}
+                          alt={product.item_name}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://via.placeholder.com/64";
+                          }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -228,26 +391,33 @@ const ProductList = () => {
                   </td>
 
                   {/* Editable/Display Fields */}
-                  {editingId === p.id ? (
+                  {editingId === product.id ? (
                     <>
                       <td className="py-4 px-6">
                         <input
                           name="item_name"
-                          value={editForm.item_name}
+                          value={editForm.item_name || ""}
                           onChange={handleEditChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                         />
                       </td>
+                      {isAdmin && (
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-600">
+                            {product.farmer_name || "Unknown"}
+                          </div>
+                        </td>
+                      )}
                       <td className="py-4 px-6">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                            
+                            ₹
                           </span>
                           <input
                             name="price"
                             type="number"
                             step="0.01"
-                            value={editForm.price}
+                            value={editForm.price || ""}
                             onChange={handleEditChange}
                             className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                           />
@@ -256,16 +426,7 @@ const ProductList = () => {
                       <td className="py-4 px-6">
                         <input
                           name="location"
-                          value={editForm.location}
-                          onChange={handleEditChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                        />
-                      </td>
-                      <td className="py-4 px-6">
-                        <input
-                          name="min_order_qty"
-                          type="number"
-                          value={editForm.min_order_qty}
+                          value={editForm.location || ""}
                           onChange={handleEditChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                         />
@@ -274,26 +435,34 @@ const ProductList = () => {
                         <input
                           name="available_stock"
                           type="number"
-                          value={editForm.available_stock}
+                          value={editForm.available_stock || ""}
                           onChange={handleEditChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                         />
                       </td>
                       <td className="py-4 px-6">
+                        <StatusBadge 
+                          status={editForm.status || product.status} 
+                          rejectionReason={editForm.rejection_reason || product.rejection_reason}
+                        />
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="space-y-3">
-                          <label className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                            <Edit2 size={16} className="mr-2" />
-                            Change Photo
-                            <input
-                              type="file"
-                              onChange={handlePhotoChange}
-                              className="hidden"
-                              accept="image/*"
-                            />
-                          </label>
+                          {!isAdmin && (
+                            <label className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                              <Edit2 size={16} className="mr-2" />
+                              Change Photo
+                              <input
+                                type="file"
+                                onChange={handlePhotoChange}
+                                className="hidden"
+                                accept="image/*"
+                              />
+                            </label>
+                          )}
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleUpdate(p.id)}
+                              onClick={() => handleUpdate(product.id)}
                               disabled={isUpdating}
                               className="flex-1 flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -319,46 +488,74 @@ const ProductList = () => {
                   ) : (
                     <>
                       <td className="py-4 px-6">
-                        <div className="font-medium text-gray-800">{p.item_name}</div>
+                        <div className="font-medium text-gray-800">{product.item_name}</div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          Min: {product.min_order_qty || 1} kg
+                        </div>
                       </td>
+                      {isAdmin && (
+                        <td className="py-4 px-6">
+                          <div className="font-medium text-gray-700">{product.farmer_name || "Unknown"}</div>
+                          <div className="text-sm text-gray-500 truncate max-w-[150px]">
+                            {product.farmer_email || ""}
+                          </div>
+                        </td>
+                      )}
                       <td className="py-4 px-6">
                         <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 font-semibold">
-                          
-                          {parseFloat(p.price).toFixed(2)}
+                          ₹{parseFloat(product.price || 0).toFixed(2)}
                         </span>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center text-gray-600">
                           <MapPin size={14} className="mr-1" />
-                          {p.location}
+                          {product.location || "Not specified"}
                         </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="text-gray-700 font-medium">{p.min_order_qty}</span>
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center">
                           <div className={`w-3 h-3 rounded-full mr-2 ${
-                            p.available_stock > 50 ? "bg-green-500" :
-                            p.available_stock > 10 ? "bg-yellow-500" : "bg-red-500"
+                            (product.available_stock || 0) > 50 ? "bg-green-500" :
+                            (product.available_stock || 0) > 10 ? "bg-yellow-500" : "bg-red-500"
                           }`}></div>
-                          <span className="font-medium">{p.available_stock}</span>
+                          <span className="font-medium">{product.available_stock || 0}</span>
+                          {(product.available_stock || 0) < 10 && (
+                            <AlertTriangle size={12} className="ml-2 text-yellow-500" />
+                          )}
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex space-x-2">
+                        <StatusBadge 
+                          status={product.status} 
+                          rejectionReason={product.rejection_reason}
+                        />
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                          {!isAdmin && product.status === 'rejected' && (
+                            <button
+                              onClick={() => {
+                                // Farmer can edit rejected product and resubmit
+                                handleEditClick(product);
+                              }}
+                              className="flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-lg transition-colors text-sm"
+                            >
+                              <Edit2 size={14} className="mr-1" />
+                              Resubmit
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleEditClick(p)}
-                            className="flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2 rounded-lg transition-colors"
+                            onClick={() => handleEditClick(product)}
+                            className="flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-lg transition-colors text-sm"
                           >
-                            <Edit2 size={16} className="mr-2" />
+                            <Edit2 size={14} className="mr-1" />
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(p.id)}
-                            className="flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2 rounded-lg transition-colors"
+                            onClick={() => setShowDeleteConfirm(product.id)}
+                            className="flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 rounded-lg transition-colors text-sm"
                           >
-                            <Trash2 size={16} className="mr-2" />
+                            <Trash2 size={14} className="mr-1" />
                             Delete
                           </button>
                         </div>
@@ -372,17 +569,62 @@ const ProductList = () => {
         </table>
       </div>
 
-      {products.length > 0 && (
-        <div className="mt-6 flex items-center justify-between text-sm text-gray-500">
-          <div>
-            Showing <span className="font-semibold">{products.length}</span> products
+      {/* Footer Stats */}
+      {filteredProducts.length > 0 && (
+        <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between text-sm text-gray-500 gap-4">
+          <div className="flex items-center space-x-4">
+            <div>
+              Showing <span className="font-semibold">{filteredProducts.length}</span> of{" "}
+              <span className="font-semibold">{products.length}</span> products
+            </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                Clear search
+              </button>
+            )}
           </div>
           <div className="text-xs">
             {editingId && (
-              <span className="text-blue-600">
-                ⓘ You are currently editing a product
+              <span className="text-blue-600 flex items-center">
+                <Edit2 size={12} className="mr-1" />
+                You are currently editing a product
               </span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              {isAdmin 
+                ? "Are you sure you want to permanently delete this product? This action cannot be undone."
+                : "Are you sure you want to delete this product? This action cannot be undone."
+              }
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(showDeleteConfirm)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                {isAdmin ? "Force Delete" : "Delete Product"}
+              </button>
+            </div>
           </div>
         </div>
       )}
