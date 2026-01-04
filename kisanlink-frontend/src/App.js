@@ -34,6 +34,7 @@ import FarmersManagement from "./pages/admin/FarmersManagement";
 import ProductsManagement from "./pages/admin/ProductsManagement";
 import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
+import PendingProducts from './pages/admin/PendingProducts';
 
 import VerificationSuccess from "./pages/VerificationSuccess";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -128,6 +129,8 @@ function App() {
         <Route path="/verification-success" element={<VerificationSuccess />} />
         // In your App.jsx or router file
         <Route path="/consumer/order-status" element={<OrderStatus />} />
+        <Route path="/admin/products/pending" element={<PendingProducts />
+        } />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

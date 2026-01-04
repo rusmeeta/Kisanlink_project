@@ -116,8 +116,7 @@ def get_pending_products():
                 u.id as farmer_id
             FROM farmer_items fi
             JOIN users u ON fi.farmer_id = u.id
-            WHERE fi.status = 'pending_approval'
-               OR fi.is_approved = FALSE
+            WHERE (fi.status = 'pending_approval' OR (fi.is_approved = FALSE AND fi.status != 'rejected'))
             ORDER BY fi.created_at DESC
         """)
         
@@ -1563,13 +1562,27 @@ def notify_low_stock():
     
 # ========== DEACTIVATE USER ==========
 
-@admin_bp.route('/users/<int:user_id>/deactivate', methods=['PUT'])
-def deactivate_user(user_id):
-    """Deactivate a user (make inactive instead of deleting)"""
+# Add these routes to your admin_bp
+
+@admin_bp.route('/users/<int:user_id>/deactivate', methods=['POST'])
+def deactivate_user_with_reason(user_id):
+    """Deactivate a user with reason and notification"""
     if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'Not authenticated'}),
+        401
     
     try:
+        data = request.get_json()
+        reason = data.get('reason', '').strip()
+        deactivation_type = data.get('deactivation_type', 'temporary')
+        notification_message = data.get('notification_message', '')  # Get the notification message from frontend
+        
+        if not reason:
+            return jsonify({
+                'success': False,
+                'error': 'Deactivation reason is required'
+            }), 400
+        
         print(f"🔒 Attempting to deactivate user ID: {user_id}")
         
         # First, check if user exists
@@ -1586,6 +1599,7 @@ def deactivate_user(user_id):
                 'success': False,
                 'error': 'User not found'
             }), 404
+            
         
         # Check if user is already inactive
         if not user.is_active:
@@ -1597,22 +1611,70 @@ def deactivate_user(user_id):
         # Soft delete: Set is_active = FALSE
         deactivate_query = text("""
             UPDATE users 
-            SET is_active = FALSE 
+            SET is_active = FALSE,
+                deactivation_reason = :reason,
+                deactivated_at = NOW(),
+                deactivated_by = :admin_id,
+                deactivation_type = :deactivation_type
             WHERE id = :user_id
         """)
-        db.session.execute(deactivate_query, {'user_id': user_id})
+        db.session.execute(deactivate_query, {
+            'user_id': user_id,
+            'reason': reason,
+            'admin_id': session.get('admin_id'),
+            'deactivation_type': deactivation_type
+        })
+        
+        # Create deactivation notification for the user
+        admin_name = session.get('admin_name', 'Admin')
+        
+        if deactivation_type == 'permanent':
+            notification_message = f"❌ Account Permanently Deactivated: Your account has been permanently deactivated by Admin. Reason: {reason}"
+        else:
+            notification_message = f"⚠️ Account Temporarily Deactivated: Your account has been temporarily deactivated by Admin. Reason: {reason}. Contact support to reactivate."
+        
+        # Save notification
+        notification_saved = False
+        try:
+            from models_notification import Notification
+            notification = Notification(
+                user_id=user_id,
+                message=notification_message,
+                target_role=user.user_type,
+                created_at=datetime.datetime.now()
+            )
+            db.session.add(notification)
+            notification_saved = True
+        except Exception:
+            try:
+                notification_query = text("""
+                    INSERT INTO notifications (user_id, message, target_role, created_at)
+                    VALUES (:user_id, :message, :target_role, NOW())
+                """)
+                db.session.execute(notification_query, {
+                    'user_id': user_id,
+                    'message': notification_message,
+                    'target_role': user.user_type
+                })
+                notification_saved = True
+            except Exception:
+                notification_saved = False
+        
         db.session.commit()
         
-        print(f"✅ User {user_id} ({user.fullname}) deactivated successfully")
+        print(f"✅ User {user_id} ({user.fullname}) deactivated with reason")
         
         return jsonify({
             'success': True,
             'message': f'User {user.fullname} has been deactivated',
+            'notification_sent': notification_saved,
             'user': {
                 'id': user.id,
                 'name': user.fullname,
                 'email': user.email,
-                'is_active': False
+                'is_active': False,
+                'deactivation_reason': reason,
+                'deactivation_type': deactivation_type
             }
         })
         
@@ -1624,15 +1686,16 @@ def deactivate_user(user_id):
             'error': str(e)
         }), 500
 
-# ========== REACTIVATE USER ==========
-
-@admin_bp.route('/users/<int:user_id>/reactivate', methods=['PUT'])
-def reactivate_user(user_id):
-    """Reactivate an inactive user"""
+@admin_bp.route('/users/<int:user_id>/reactivate', methods=['POST'])
+def reactivate_user_with_notification(user_id):
+    """Reactivate an inactive user with notification"""
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
+        data = request.get_json()
+        reason = data.get('reason', 'Account reactivated by Admin').strip()
+        
         print(f"♻️ Attempting to reactivate user ID: {user_id}")
         
         # First, check if user exists
@@ -1657,25 +1720,66 @@ def reactivate_user(user_id):
                 'error': 'User is already active'
             }), 400
         
-        # Reactivate: Set is_active = TRUE
+        # Reactivate: Set is_active = TRUE and clear deactivation info
         reactivate_query = text("""
             UPDATE users 
-            SET is_active = TRUE 
+            SET is_active = TRUE,
+                deactivation_reason = NULL,
+                deactivated_at = NULL,
+                deactivated_by = NULL,
+                reactivated_at = NOW(),
+                reactivation_reason = :reason
             WHERE id = :user_id
         """)
-        db.session.execute(reactivate_query, {'user_id': user_id})
+        db.session.execute(reactivate_query, {
+            'user_id': user_id,
+            'reason': reason
+        })
+        
+        # Create reactivation notification for the user
+        notification_message = f"✅ Account Reactivated: Your account has been reactivated. Reason: {reason}"
+        
+        # Save notification
+        notification_saved = False
+        try:
+            from models_notification import Notification
+            notification = Notification(
+                user_id=user_id,
+                message=notification_message,
+                target_role=user.user_type,
+                created_at=datetime.datetime.now()
+            )
+            db.session.add(notification)
+            notification_saved = True
+        except Exception:
+            try:
+                notification_query = text("""
+                    INSERT INTO notifications (user_id, message, target_role, created_at)
+                    VALUES (:user_id, :message, :target_role, NOW())
+                """)
+                db.session.execute(notification_query, {
+                    'user_id': user_id,
+                    'message': notification_message,
+                    'target_role': user.user_type
+                })
+                notification_saved = True
+            except Exception:
+                notification_saved = False
+        
         db.session.commit()
         
-        print(f"✅ User {user_id} ({user.fullname}) reactivated successfully")
+        print(f"✅ User {user_id} ({user.fullname}) reactivated")
         
         return jsonify({
             'success': True,
             'message': f'User {user.fullname} has been reactivated',
+            'notification_sent': notification_saved,
             'user': {
                 'id': user.id,
                 'name': user.fullname,
                 'email': user.email,
-                'is_active': True
+                'is_active': True,
+                'reactivation_reason': reason
             }
         })
         

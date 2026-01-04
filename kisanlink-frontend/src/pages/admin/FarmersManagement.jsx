@@ -5,14 +5,20 @@ import {
   Search,
   Filter,
   Eye,
-  Trash2,
   UserCheck,
   UserX,
   Mail,
   MapPin,
   Calendar,
   RefreshCw,
-  Package
+  Package,
+  AlertCircle,
+  Shield,
+  Bell,
+  AlertTriangle,
+  CheckCircle,
+  MessageSquare,
+  MailWarning
 } from "lucide-react";
 
 const FarmersManagement = () => {
@@ -20,37 +26,49 @@ const FarmersManagement = () => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active"); // Default to active
+  const [statusFilter, setStatusFilter] = useState("active");
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [error, setError] = useState("");
+  const [actionLoading, setActionLoading] = useState({});
+
+  // Deactivation modal states
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [farmerToDeactivate, setFarmerToDeactivate] = useState(null);
+  const [deactivationReason, setDeactivationReason] = useState("");
+  const [deactivationType, setDeactivationType] = useState("temporary");
+  const [notificationMessage, setNotificationMessage] = useState("");
+
+  // Reactivation modal states
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [farmerToReactivate, setFarmerToReactivate] = useState(null);
+  const [reactivationReason, setReactivationReason] = useState("");
 
   useEffect(() => {
-    // Check frontend admin login
     const isAdminLoggedIn = localStorage.getItem('adminLoggedIn');
-    
+
     if (!isAdminLoggedIn) {
-      navigate("/");
+      navigate("/admin");
       return;
     }
-    
+
     checkAdminAuth();
     fetchFarmers();
-  }, [navigate, statusFilter]); // Add statusFilter to dependencies
+  }, [navigate, statusFilter]);
 
   const checkAdminAuth = async () => {
     try {
       const res = await axios.get("http://localhost:5001/admin/check-auth", {
         withCredentials: true
       });
-      
+
       if (!res.data.authenticated) {
         localStorage.removeItem('adminLoggedIn');
-        navigate("/");
+        navigate("/admin");
       }
     } catch (err) {
       console.error("Auth error:", err);
       localStorage.removeItem('adminLoggedIn');
-      navigate("/");
+      navigate("/admin");
     }
   };
 
@@ -59,14 +77,14 @@ const FarmersManagement = () => {
       console.log(`🔍 Fetching farmers from backend (status: ${statusFilter})...`);
       setLoading(true);
       setError("");
-      
+
       const res = await axios.get(`http://localhost:5001/admin/farmers?status=${statusFilter}`, {
         withCredentials: true,
         timeout: 10000
       });
-      
+
       console.log("📦 Farmers API response:", res.data);
-      
+
       if (res.data.success && Array.isArray(res.data.farmers)) {
         console.log(`✅ Found ${res.data.farmers.length} farmers from database`);
         setFarmers(res.data.farmers);
@@ -75,7 +93,7 @@ const FarmersManagement = () => {
         setError("Failed to load farmers: Invalid response format");
         setFarmers([]);
       }
-      
+
     } catch (err) {
       console.error("❌ Error fetching farmers:", err);
       setError(`Failed to load farmers: ${err.message}`);
@@ -85,64 +103,150 @@ const FarmersManagement = () => {
     }
   };
 
-  const handleDeactivateFarmer = async (farmerId, farmerName) => {
-    if (!window.confirm(`Are you sure you want to deactivate ${farmerName}? They will be hidden from the system but can be restored later.`)) return;
+  const openDeactivateModal = (farmer) => {
+    setFarmerToDeactivate(farmer);
+    setDeactivationReason("");
+    setDeactivationType("temporary");
+
+    // Generate the notification message preview
+    const message = generateDeactivationMessage(farmer.fullname, "", "temporary");
+    setNotificationMessage(message);
+
+    setShowDeactivateModal(true);
+  };
+
+  const openReactivateModal = (farmer) => {
+    setFarmerToReactivate(farmer);
+    setReactivationReason("");
+    setShowReactivateModal(true);
+  };
+
+  // Generate the notification message that will be sent to farmer
+  const generateDeactivationMessage = (farmerName, reason, type) => {
+    const typeText = type === "permanent" ? "permanently" : "temporarily";
+    const baseMessage = `Dear ${farmerName},\n\nYour account has been ${typeText} deactivated.`;
+
+    if (reason) {
+      return `${baseMessage}\n\nReason: ${reason}\n\nPlease contact support if you have any questions.\n\n- FarmLink Administration`;
+    }
+
+    return `${baseMessage}\n\nPlease contact support for more information.\n\n- FarmLink Administration`;
+  };
+
+  // Update notification message when reason or type changes
+  useEffect(() => {
+    if (farmerToDeactivate && deactivationReason) {
+      const message = generateDeactivationMessage(
+        farmerToDeactivate.fullname,
+        deactivationReason,
+        deactivationType
+      );
+      setNotificationMessage(message);
+    }
+  }, [deactivationReason, deactivationType, farmerToDeactivate]);
+
+  const handleDeactivateFarmer = async () => {
+    if (!farmerToDeactivate || !deactivationReason.trim()) {
+      alert("Please provide a deactivation reason");
+      return;
+    }
 
     try {
-      // Use deactivate endpoint
-      await axios.put(
-        `http://localhost:5001/admin/users/${farmerId}/deactivate`,
-        {},
-        { withCredentials: true }
+      setActionLoading(prev => ({ ...prev, [farmerToDeactivate.id]: 'deactivating' }));
+
+      // Send the notification message along with other data
+      const response = await axios.post(
+        `http://localhost:5001/admin/users/${farmerToDeactivate.id}/deactivate`,
+        {
+          reason: deactivationReason,
+          deactivation_type: deactivationType,
+          notification_message: notificationMessage // Include the message
+        },
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
-      
-      fetchFarmers();
-      alert(`Farmer ${farmerName} has been deactivated!`);
-      
+
+      if (response.data.success) {
+        alert(`✅ ${response.data.message}`);
+        fetchFarmers();
+      } else {
+        alert(`❌ ${response.data.error || 'Failed to deactivate farmer'}`);
+      }
+
     } catch (err) {
       console.error("Error deactivating farmer:", err);
-      
+
       if (err.response && err.response.data && err.response.data.error) {
         alert(`Failed to deactivate farmer: ${err.response.data.error}`);
       } else {
         alert("Failed to deactivate farmer. Please try again.");
       }
+    } finally {
+      setActionLoading(prev => ({ ...prev, [farmerToDeactivate.id]: false }));
+      setShowDeactivateModal(false);
+      setFarmerToDeactivate(null);
+      setDeactivationReason("");
+      setDeactivationType("temporary");
+      setNotificationMessage("");
     }
   };
 
-  const handleReactivateFarmer = async (farmerId, farmerName) => {
-    if (!window.confirm(`Are you sure you want to reactivate ${farmerName}?`)) return;
+  const handleReactivateFarmer = async () => {
+    if (!farmerToReactivate) return;
 
     try {
-      // Use reactivate endpoint
-      await axios.put(
-        `http://localhost:5001/admin/users/${farmerId}/reactivate`,
-        {},
-        { withCredentials: true }
+      setActionLoading(prev => ({ ...prev, [farmerToReactivate.id]: 'reactivating' }));
+
+      const response = await axios.post(
+        `http://localhost:5001/admin/users/${farmerToReactivate.id}/reactivate`,
+        {
+          reason: reactivationReason || "Admin manually reactivated account"
+        },
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
-      
-      fetchFarmers();
-      alert(`Farmer ${farmerName} has been reactivated!`);
-      
+
+      if (response.data.success) {
+        alert(`✅ ${response.data.message}`);
+        fetchFarmers();
+      } else {
+        alert(`❌ ${response.data.error || 'Failed to reactivate farmer'}`);
+      }
+
     } catch (err) {
       console.error("Error reactivating farmer:", err);
-      alert("Failed to reactivate farmer. Please try again.");
+
+      if (err.response && err.response.data && err.response.data.error) {
+        alert(`Failed to reactivate farmer: ${err.response.data.error}`);
+      } else {
+        alert("Failed to reactivate farmer. Please try again.");
+      }
+    } finally {
+      setActionLoading(prev => ({ ...prev, [farmerToReactivate.id]: false }));
+      setShowReactivateModal(false);
+      setFarmerToReactivate(null);
+      setReactivationReason("");
     }
   };
-
-  // REMOVE THIS FUNCTION - We're not using hard delete anymore
-  // const handleDeleteFarmer = async (farmerId) => { ... }
 
   const viewFarmerDetails = (farmer) => {
     setSelectedFarmer(farmer);
   };
 
   const filteredFarmers = farmers.filter((farmer) => {
-    const matchesSearch = 
+    const matchesSearch =
       (farmer.fullname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (farmer.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (farmer.location || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     return matchesSearch;
   });
 
@@ -152,7 +256,9 @@ const FarmersManagement = () => {
       return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (e) {
       return "Invalid date";
@@ -163,12 +269,14 @@ const FarmersManagement = () => {
     if (farmer.is_active === false) {
       return {
         text: "Inactive",
-        color: "bg-gray-100 text-gray-800"
+        color: "bg-gray-100 text-gray-800",
+        icon: <UserX className="h-3 w-3 mr-1" />
       };
     }
     return {
       text: "Active",
-      color: "bg-green-100 text-green-800"
+      color: "bg-green-100 text-green-800",
+      icon: <UserCheck className="h-3 w-3 mr-1" />
     };
   };
 
@@ -192,11 +300,17 @@ const FarmersManagement = () => {
             <div className="flex items-center">
               <button
                 onClick={() => navigate("/admin/dashboard")}
-                className="mr-4 text-gray-600 hover:text-gray-900"
+                className="mr-4 text-gray-600 hover:text-gray-900 flex items-center"
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-bold text-gray-900">Farmers Management</h1>
+              <div className="flex items-center">
+                <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Farmers Management</h1>
+                  <p className="text-xs text-gray-500">Manage farmer accounts and status</p>
+                </div>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <button
@@ -225,10 +339,11 @@ const FarmersManagement = () => {
               Data fetched from PostgreSQL database
             </div>
           </div>
-          
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
               <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
                 <span className="text-red-700">{error}</span>
               </div>
             </div>
@@ -296,6 +411,8 @@ const FarmersManagement = () => {
                 {filteredFarmers.length > 0 ? (
                   filteredFarmers.map((farmer) => {
                     const status = getStatusDisplay(farmer);
+                    const isActionLoading = actionLoading[farmer.id];
+
                     return (
                       <tr key={farmer.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -328,7 +445,8 @@ const FarmersManagement = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
+                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full items-center ${status.color}`}>
+                            {status.icon}
                             {status.text}
                           </span>
                         </td>
@@ -348,27 +466,38 @@ const FarmersManagement = () => {
                           <div className="flex space-x-2">
                             <button
                               onClick={() => viewFarmerDetails(farmer)}
-                              className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                              className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
                               title="View Details"
+                              disabled={isActionLoading}
                             >
                               <Eye className="h-5 w-5" />
                             </button>
-                            
+
                             {farmer.is_active ? (
                               <button
-                                onClick={() => handleDeactivateFarmer(farmer.id, farmer.fullname)}
-                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                                title="Deactivate"
+                                onClick={() => openDeactivateModal(farmer)}
+                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                title="Deactivate Account"
+                                disabled={isActionLoading}
                               >
-                                <UserX className="h-5 w-5" />
+                                {isActionLoading === 'deactivating' ? (
+                                  <div className="h-5 w-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <UserX className="h-5 w-5" />
+                                )}
                               </button>
                             ) : (
                               <button
-                                onClick={() => handleReactivateFarmer(farmer.id, farmer.fullname)}
-                                className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded"
-                                title="Reactivate"
+                                onClick={() => openReactivateModal(farmer)}
+                                className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                                title="Reactivate Account"
+                                disabled={isActionLoading}
                               >
-                                <UserCheck className="h-5 w-5" />
+                                {isActionLoading === 'reactivating' ? (
+                                  <div className="h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <UserCheck className="h-5 w-5" />
+                                )}
                               </button>
                             )}
                           </div>
@@ -433,29 +562,161 @@ const FarmersManagement = () => {
                     </div>
                   </div>
 
+                  {/* Status Badge with Deactivation Info */}
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-gray-50">
+                    <div>
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedFarmer.is_active
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                        }`}>
+                        {selectedFarmer.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      {!selectedFarmer.is_active && selectedFarmer.deactivation_type && (
+                        <span className="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded">
+                          {selectedFarmer.deactivation_type === 'permanent' ? 'Permanent' : 'Temporary'}
+                        </span>
+                      )}
+                    </div>
+                    {selectedFarmer.deactivated_at && (
+                      <div className="text-sm text-gray-500">
+                        Deactivated on: {formatDate(selectedFarmer.deactivated_at)}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Details Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Location</p>
                       <p className="font-medium">{selectedFarmer.location || 'Unknown'}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">Status</p>
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        selectedFarmer.is_active
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {selectedFarmer.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
+
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Products</p>
                       <p className="font-medium">{selectedFarmer.product_count || 0} listed</p>
                     </div>
+
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Login Count</p>
                       <p className="font-medium">{selectedFarmer.login_count || 0}</p>
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">User Type</p>
+                      <p className="font-medium">Farmer</p>
+                    </div>
+                  </div>
+
+                  {/* Deactivation Details Section (Only show if deactivated) */}
+                  {!selectedFarmer.is_active && selectedFarmer.deactivation_reason && (
+                    <div className="space-y-4">
+                      {/* Deactivation Reason */}
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-start">
+                          <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <h5 className="font-medium text-red-800 mb-1">Account Deactivation Details</h5>
+                            <div className="mb-3">
+                              <p className="text-sm font-semibold text-gray-700 mb-1">Deactivation Reason:</p>
+                      <div className="bg-white p-3 rounded border border-red-100">
+                        <p className="text-red-700 font-medium">
+                          {selectedFarmer.deactivation_reason || 
+                           selectedFarmer.reason || 
+                           'No specific reason provided'}
+                        </p>
+                      </div>
+                    </div>
+                            <p className="text-sm text-red-700 mb-2">
+                              <span className="font-medium">Reason:</span> {selectedFarmer.deactivation_reason}
+                            </p>
+                            {selectedFarmer.deactivated_by_name && (
+                              <p className="text-xs text-red-600">
+                                Deactivated by: {selectedFarmer.deactivated_by_name} • {formatDate(selectedFarmer.deactivated_at)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Notification Message Sent to Farmer */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-start mb-3">
+                          <MessageSquare className="h-5 w-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <h5 className="font-medium text-blue-800">Notification Sent to Farmer</h5>
+                            <p className="text-xs text-blue-600 mb-2">
+                              This message was sent to the farmer when account was deactivated
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded border border-blue-100">
+                          <div className="flex items-center mb-2">
+                            <MailWarning className="h-4 w-4 text-orange-500 mr-2" />
+                            <span className="text-sm font-medium text-gray-700">Message Content:</span>
+                          </div>
+                          <div className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded">
+                            {selectedFarmer.notification_message ||
+                              `Dear ${selectedFarmer.fullname || 'Farmer'},
+
+Your account has been ${selectedFarmer.deactivation_type === 'permanent' ? 'permanently' : 'temporarily'} deactivated.
+
+Reason: ${selectedFarmer.deactivation_reason}
+
+Please contact support if you have any questions.
+
+- FarmLink Administration`}
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            Sent on: {formatDate(selectedFarmer.deactivated_at)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reactivation History (If any) */}
+                  {selectedFarmer.reactivated_at && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                        <div>
+                          <h5 className="font-medium text-green-800 mb-1">Account Reactivated</h5>
+                          <p className="text-sm text-green-700">
+                            Reactivated on: {formatDate(selectedFarmer.reactivated_at)}
+                            {selectedFarmer.reactivation_reason && (
+                              <span className="block mt-1">Reason: {selectedFarmer.reactivation_reason}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Account History Summary */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h5 className="font-medium text-gray-900 mb-3">Account History</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Account Created:</span>
+                        <span className="font-medium">{formatDate(selectedFarmer.created_at)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Login:</span>
+                        <span className="font-medium">{formatDate(selectedFarmer.last_login)}</span>
+                      </div>
+                      {selectedFarmer.deactivated_at && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Deactivated:</span>
+                          <span className="font-medium text-red-600">{formatDate(selectedFarmer.deactivated_at)}</span>
+                        </div>
+                      )}
+                      {selectedFarmer.reactivated_at && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Reactivated:</span>
+                          <span className="font-medium text-green-600">{formatDate(selectedFarmer.reactivated_at)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -464,26 +725,238 @@ const FarmersManagement = () => {
                     {selectedFarmer.is_active ? (
                       <button
                         onClick={() => {
-                          handleDeactivateFarmer(selectedFarmer.id, selectedFarmer.fullname);
                           setSelectedFarmer(null);
+                          openDeactivateModal(selectedFarmer);
                         }}
-                        className="flex-1 py-2 px-4 bg-red-50 text-red-700 rounded-lg font-medium hover:bg-red-100"
+                        className="flex-1 py-2 px-4 bg-red-50 text-red-700 rounded-lg font-medium hover:bg-red-100 transition-colors"
                       >
                         Deactivate Account
                       </button>
                     ) : (
                       <button
                         onClick={() => {
-                          handleReactivateFarmer(selectedFarmer.id, selectedFarmer.fullname);
+                          openReactivateModal(selectedFarmer);
                           setSelectedFarmer(null);
                         }}
-                        className="flex-1 py-2 px-4 bg-green-50 text-green-700 rounded-lg font-medium hover:bg-green-100"
+                        className="flex-1 py-2 px-4 bg-green-50 text-green-700 rounded-lg font-medium hover:bg-green-100 transition-colors"
                       >
                         Reactivate Account
                       </button>
                     )}
+                    <button
+                      onClick={() => setSelectedFarmer(null)}
+                      className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                    >
+                      Close
+                    </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Deactivation Modal */}
+        {showDeactivateModal && farmerToDeactivate && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg sm:rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Deactivate Farmer Account</h3>
+                <button
+                  onClick={() => {
+                    setShowDeactivateModal(false);
+                    setFarmerToDeactivate(null);
+                    setDeactivationReason("");
+                    setNotificationMessage("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Farmer: <span className="font-medium">{farmerToDeactivate?.fullname}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Email: <span className="font-medium">{farmerToDeactivate?.email}</span>
+                </p>
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center">
+                    <Bell className="h-5 w-5 text-yellow-600 mr-2" />
+                    <span className="text-sm text-yellow-700">
+                      A notification will be sent to the farmer explaining the deactivation.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Deactivation Type
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="deactivationType"
+                      value="temporary"
+                      checked={deactivationType === "temporary"}
+                      onChange={(e) => setDeactivationType(e.target.value)}
+                      className="h-4 w-4 text-red-600"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Temporary (Can be reactivated)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="deactivationType"
+                      value="permanent"
+                      checked={deactivationType === "permanent"}
+                      onChange={(e) => setDeactivationType(e.target.value)}
+                      className="h-4 w-4 text-red-600"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Permanent</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Deactivation Reason *
+                </label>
+                <textarea
+                  value={deactivationReason}
+                  onChange={(e) => setDeactivationReason(e.target.value)}
+                  placeholder="Explain why this farmer account is being deactivated..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  rows="3"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This reason will be shared with the farmer in the notification.
+                </p>
+              </div>
+
+              {/* Notification Message Preview */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Notification Preview
+                  </label>
+                  <span className="text-xs text-gray-500">Message that will be sent to farmer</span>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="text-sm text-gray-700 whitespace-pre-line">
+                    {notificationMessage || "Enter deactivation reason to see preview..."}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeactivateModal(false);
+                    setFarmerToDeactivate(null);
+                    setDeactivationReason("");
+                    setNotificationMessage("");
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeactivateFarmer}
+                  disabled={!deactivationReason.trim() || actionLoading[farmerToDeactivate?.id] === 'deactivating'}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading[farmerToDeactivate?.id] === 'deactivating' ? "Deactivating..." : "Deactivate Account"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reactivation Modal */}
+        {showReactivateModal && farmerToReactivate && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg sm:rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Reactivate Farmer Account</h3>
+                <button
+                  onClick={() => {
+                    setShowReactivateModal(false);
+                    setFarmerToReactivate(null);
+                    setReactivationReason("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Farmer: <span className="font-medium">{farmerToReactivate?.fullname}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Email: <span className="font-medium">{farmerToReactivate?.email}</span>
+                </p>
+                {farmerToReactivate?.deactivation_reason && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start">
+                      <AlertTriangle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-red-800 mb-1">Previous Deactivation Reason:</p>
+                        <p className="text-sm text-red-700">{farmerToReactivate.deactivation_reason}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <Bell className="h-5 w-5 text-green-600 mr-2" />
+                    <span className="text-sm text-green-700">
+                      A notification will be sent to the farmer about the reactivation.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reactivation Reason (Optional)
+                </label>
+                <textarea
+                  value={reactivationReason}
+                  onChange={(e) => setReactivationReason(e.target.value)}
+                  placeholder="Add a reason for reactivating this account..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  rows="3"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This will be recorded in the account history.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowReactivateModal(false);
+                    setFarmerToReactivate(null);
+                    setReactivationReason("");
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReactivateFarmer}
+                  disabled={actionLoading[farmerToReactivate?.id] === 'reactivating'}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading[farmerToReactivate?.id] === 'reactivating' ? "Reactivating..." : "Reactivate Account"}
+                </button>
               </div>
             </div>
           </div>

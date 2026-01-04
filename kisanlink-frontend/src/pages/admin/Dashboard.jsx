@@ -1,4 +1,3 @@
-// src/pages/admin/Dashboard.jsx - CLEAN LAYOUT WITH NO DUPLICATION
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -35,7 +34,9 @@ const AdminDashboard = () => {
     lowStockProducts: 0,
     pendingProducts: 0,
     approvedProducts: 0,
-    activeFarmers: 0
+    activeFarmers: 0,
+    totalUsers: 0,
+    activeListings: 0
   });
   const [recentFarmers, setRecentFarmers] = useState([]);
   const [recentConsumers, setRecentConsumers] = useState([]);
@@ -49,7 +50,7 @@ const AdminDashboard = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [approvingProduct, setApprovingProduct] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview"); // "overview", "products", "users"
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     checkAdminAuth();
@@ -67,14 +68,14 @@ const AdminDashboard = () => {
       } else {
         const isAdminLoggedIn = localStorage.getItem('adminLoggedIn');
         if (!isAdminLoggedIn) {
-          navigate("/");
+          navigate("/admin");
         }
       }
     } catch (err) {
       console.error("Auth error:", err);
       const isAdminLoggedIn = localStorage.getItem('adminLoggedIn');
       if (!isAdminLoggedIn) {
-        navigate("/");
+        navigate("/admin");
       }
     }
   };
@@ -88,19 +89,19 @@ const AdminDashboard = () => {
       });
       setStats(statsResponse.data);
 
-      // Load recent farmers (only 3 for overview)
+      // Load recent farmers
       const farmersResponse = await axios.get("http://localhost:5001/admin/recent-farmers", {
         withCredentials: true
       });
-      setRecentFarmers(farmersResponse.data.farmers?.slice(0, 3) || []);
+      setRecentFarmers(farmersResponse.data.farmers || []);
 
-      // Load recent consumers (only 3 for overview)
+      // Load recent consumers
       const consumersResponse = await axios.get("http://localhost:5001/admin/recent-consumers", {
         withCredentials: true
       });
-      setRecentConsumers(consumersResponse.data.consumers?.slice(0, 3) || []);
+      setRecentConsumers(consumersResponse.data.consumers || []);
 
-      // Load low stock products (only critical ones: <5 units)
+      // Load low stock products
       const lowStockResponse = await axios.get("http://localhost:5001/admin/low-stock-products", {
         withCredentials: true
       });
@@ -110,7 +111,7 @@ const AdminDashboard = () => {
         setLowStockProducts(criticalProducts.slice(0, 3));
       }
 
-      // Load pending products for approval (only 3 for overview)
+      // Load pending products for approval
       const pendingResponse = await axios.get("http://localhost:5001/admin/products/pending", {
         withCredentials: true
       });
@@ -121,6 +122,7 @@ const AdminDashboard = () => {
 
     } catch (err) {
       console.error("Error loading dashboard data:", err);
+      // Set fallback data
       setStats({
         totalFarmers: 8,
         totalConsumers: 1,
@@ -128,7 +130,9 @@ const AdminDashboard = () => {
         lowStockProducts: 0,
         pendingProducts: 3,
         approvedProducts: 2,
-        activeFarmers: 8
+        activeFarmers: 8,
+        totalUsers: 9,
+        activeListings: 2
       });
     } finally {
       setLoading(false);
@@ -264,7 +268,20 @@ const AdminDashboard = () => {
       localStorage.removeItem('adminLoggedIn');
       localStorage.removeItem('adminEmail');
       localStorage.removeItem('adminName');
-      navigate("/");
+      navigate("/admin");
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "Never";
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return "Invalid date";
     }
   };
 
@@ -293,7 +310,7 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-right">
+              <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-gray-900">{adminName}</p>
                 <p className="text-xs text-gray-500">Administrator</p>
               </div>
@@ -376,7 +393,7 @@ const AdminDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalFarmers + stats.totalConsumers}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalUsers || (stats.totalFarmers + stats.totalConsumers)}</p>
                     <div className="flex items-center mt-1">
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full mr-2">
                         {stats.totalFarmers} Farmers
@@ -447,7 +464,7 @@ const AdminDashboard = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Link
-                      to="/admin/products"
+                      to="/admin/products/pending"
                       className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100 group"
                     >
                       <div className="flex items-center">
@@ -533,7 +550,7 @@ const AdminDashboard = () => {
                             </div>
                           ))}
                         </div>
-                        <Link to="/admin/products" className="text-xs text-orange-600 hover:text-orange-800 font-medium mt-2 block">
+                        <Link to="/admin/products/pending" className="text-xs text-orange-600 hover:text-orange-800 font-medium mt-2 block">
                           Review all pending products →
                         </Link>
                       </div>
@@ -903,7 +920,7 @@ const AdminDashboard = () => {
                     <Users className="h-6 w-6 text-blue-600 mr-2" />
                     <span className="font-medium text-gray-900">Total Users</span>
                   </div>
-                  <p className="text-3xl font-bold text-gray-900">{stats.totalFarmers + stats.totalConsumers}</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.totalUsers || (stats.totalFarmers + stats.totalConsumers)}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm text-blue-700">{stats.totalFarmers} farmers</span>
                     <span className="text-sm text-purple-700">{stats.totalConsumers} consumers</span>
