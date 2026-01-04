@@ -56,33 +56,49 @@ const FarmerDashboard = () => {
   };
 
   // NEW: Fetch recent orders
-  const fetchRecentOrders = async () => {
-    try {
-      const farmerId = localStorage.getItem("userId");
-      if (!farmerId) return;
-
-      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
-        credentials: "include",
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.orders) {
-          setRecentOrders(data.orders);
-          
-          // Count pending orders
-          const pending = data.orders.filter(o => o.status === 'placed').length;
-          setStats(prev => ({
-            ...prev,
-            pendingOrders: pending
-          }));
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching orders:", error);
+  // In fetchRecentOrders function
+const fetchRecentOrders = async () => {
+  try {
+    const farmerId = localStorage.getItem("userId");
+    if (!farmerId) {
+      console.error("No farmer ID found");
+      return;
     }
-  };
 
+    const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+      credentials: "include",
+    });
+    
+    if (!response.ok) {
+      console.error(`Failed to fetch orders: ${response.status}`);
+      return;
+    }
+    
+    const data = await response.json();
+    if (data.orders) {
+      // Sort by newest first
+      const sortedOrders = data.orders.sort((a, b) => 
+        new Date(b.order_date) - new Date(a.order_date)
+      );
+      
+      setRecentOrders(sortedOrders);
+      
+      // Count pending orders
+      const pending = sortedOrders.filter(o => 
+        o.status === 'placed' || o.status === 'preparing'
+      ).length;
+      
+      setStats(prev => ({
+        ...prev,
+        pendingOrders: pending
+      }));
+    }
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    // Set empty array on error
+    setRecentOrders([]);
+  }
+};
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
     try {

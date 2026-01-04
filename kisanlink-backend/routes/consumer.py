@@ -1,8 +1,11 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from extensions import db
 from utils.distance import haversine
 from models_user import User
 from models_message import Message
+from models_farmer_items import FarmerItem
+from models_order import Order
+from sqlalchemy import or_
 
 consumer_bp = Blueprint("consumer", __name__)
 
@@ -18,11 +21,12 @@ def nearby_products():
     except:
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # 2. Fetch all farmer_items + farmer location
+    # 2. Fetch all farmer_items + farmer location (only active farmers)
     query = """
         SELECT fi.*, u.fullname AS farmer_name, u.latitude AS farmer_lat, u.longitude AS farmer_lon
         FROM farmer_items fi
         JOIN users u ON fi.farmer_id = u.id
+        WHERE u.is_active = true  -- Only show products from active farmers
     """
     result = db.session.execute(query)
 
@@ -57,17 +61,20 @@ def get_farmer_details(farmer_id):
     Used in consumer chat to show farmer name and details
     """
     try:
-        # Get farmer from users table
-        farmer = User.query.filter_by(id=farmer_id, user_type='farmer').first()
+        # Get farmer from users table - only if active
+        farmer = User.query.filter_by(
+            id=farmer_id, 
+            user_type='farmer',
+            is_active=True  # Only show details for active farmers
+        ).first()
         
         if not farmer:
             return jsonify({
                 "status": "error",
-                "message": f"Farmer with ID {farmer_id} not found"
+                "message": f"Farmer with ID {farmer_id} not found or not active"
             }), 404
         
-        # Get farmer's products count
-        from models_farmer_items import FarmerItem
+        # Get farmer's products count (only active farmers)
         product_count = FarmerItem.query.filter_by(farmer_id=farmer_id).count()
         
         # Get rating (if you have rating system)
@@ -83,6 +90,7 @@ def get_farmer_details(farmer_id):
                 "latitude": farmer.latitude,
                 "longitude": farmer.longitude,
                 "user_type": farmer.user_type,
+                "is_active": farmer.is_active,
                 "product_count": product_count,
                 "rating": rating,
                 "joined_date": farmer.created_at.strftime("%Y-%m-%d") if hasattr(farmer, 'created_at') else "Unknown"
@@ -101,8 +109,6 @@ def get_consumer_profile():
     """
     Get current consumer profile info
     """
-    from flask import session
-    
     if 'user_id' not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401
     
@@ -115,7 +121,6 @@ def get_consumer_profile():
             return jsonify({"status": "error", "message": "Consumer not found"}), 404
         
         # Get consumer stats
-        from models_order import Order
         total_orders = Order.query.filter_by(consumer_id=user_id).count()
         
         # Get total spent
@@ -135,6 +140,7 @@ def get_consumer_profile():
                 "latitude": consumer.latitude,
                 "longitude": consumer.longitude,
                 "user_type": consumer.user_type,
+                "is_active": consumer.is_active,
                 "total_orders": total_orders,
                 "total_spent": total_spent,
                 "joined_date": consumer.created_at.strftime("%Y-%m-%d") if hasattr(consumer, 'created_at') else "Unknown"
@@ -154,12 +160,15 @@ def get_all_farmers():
     Get list of all farmers with basic info
     """
     try:
-        farmers = User.query.filter_by(user_type='farmer').all()
+        # Only show active farmers
+        farmers = User.query.filter_by(
+            user_type='farmer',
+            is_active=True  # Only active farmers
+        ).all()
         
         farmers_list = []
         for farmer in farmers:
             # Get product count for each farmer
-            from models_farmer_items import FarmerItem
             product_count = FarmerItem.query.filter_by(farmer_id=farmer.id).count()
             
             farmers_list.append({
@@ -167,6 +176,7 @@ def get_all_farmers():
                 "fullname": farmer.fullname,
                 "location": farmer.location,
                 "email": farmer.email,
+                "is_active": farmer.is_active,
                 "product_count": product_count,
                 "latitude": farmer.latitude,
                 "longitude": farmer.longitude
@@ -191,13 +201,17 @@ def get_farmer_products(farmer_id):
     Get all products from a specific farmer
     """
     try:
-        # Check if farmer exists
-        farmer = User.query.filter_by(id=farmer_id, user_type='farmer').first()
+        # Check if farmer exists AND is active
+        farmer = User.query.filter_by(
+            id=farmer_id, 
+            user_type='farmer',
+            is_active=True  # Only show products from active farmers
+        ).first()
+        
         if not farmer:
-            return jsonify({"status": "error", "message": "Farmer not found"}), 404
+            return jsonify({"status": "error", "message": "Farmer not found or not active"}), 404
         
         # Get farmer's products
-        from models_farmer_items import FarmerItem
         products = FarmerItem.query.filter_by(farmer_id=farmer_id).all()
         
         products_list = []
@@ -218,7 +232,8 @@ def get_farmer_products(farmer_id):
             "farmer": {
                 "id": farmer.id,
                 "fullname": farmer.fullname,
-                "location": farmer.location
+                "location": farmer.location,
+                "is_active": farmer.is_active
             },
             "products": products_list,
             "count": len(products_list)
@@ -245,10 +260,11 @@ def search():
     try:
         results = {"farmers": [], "products": []}
         
-        # Search farmers
+        # Search farmers - only active ones
         if search_type in ['farmers', 'both']:
             farmers = User.query.filter(
                 User.user_type == 'farmer',
+                User.is_active == True,  # Only active farmers
                 (User.fullname.ilike(f'%{search_query}%')) |
                 (User.location.ilike(f'%{search_query}%'))
             ).limit(20).all()
@@ -258,33 +274,40 @@ def search():
                     "id": farmer.id,
                     "fullname": farmer.fullname,
                     "location": farmer.location,
-                    "email": farmer.email
+                    "email": farmer.email,
+                    "is_active": farmer.is_active
                 })
         
-        # Search products
+        # Search products - only from active farmers
         if search_type in ['products', 'both']:
-            from models_farmer_items import FarmerItem
-            from sqlalchemy import or_
+            # First get all active farmer IDs
+            active_farmer_ids = [farmer.id for farmer in User.query.filter_by(
+                user_type='farmer', 
+                is_active=True
+            ).all()]
             
-            products = FarmerItem.query.filter(
-                or_(
-                    FarmerItem.item_name.ilike(f'%{search_query}%'),
-                    FarmerItem.location.ilike(f'%{search_query}%')
-                )
-            ).limit(20).all()
-            
-            for product in products:
-                # Get farmer info
-                farmer = User.query.get(product.farmer_id)
-                results["products"].append({
-                    "id": product.id,
-                    "item_name": product.item_name,
-                    "price": product.price,
-                    "photo_path": product.photo_path,
-                    "location": product.location,
-                    "farmer_id": product.farmer_id,
-                    "farmer_name": farmer.fullname if farmer else "Unknown"
-                })
+            if active_farmer_ids:
+                products = FarmerItem.query.filter(
+                    FarmerItem.farmer_id.in_(active_farmer_ids),
+                    or_(
+                        FarmerItem.item_name.ilike(f'%{search_query}%'),
+                        FarmerItem.location.ilike(f'%{search_query}%')
+                    )
+                ).limit(20).all()
+                
+                for product in products:
+                    # Get farmer info
+                    farmer = User.query.get(product.farmer_id)
+                    results["products"].append({
+                        "id": product.id,
+                        "item_name": product.item_name,
+                        "price": product.price,
+                        "photo_path": product.photo_path,
+                        "location": product.location,
+                        "farmer_id": product.farmer_id,
+                        "farmer_name": farmer.fullname if farmer else "Unknown",
+                        "farmer_active": farmer.is_active if farmer else False
+                    })
         
         return jsonify({
             "status": "success",
@@ -301,6 +324,48 @@ def search():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -----------------------------
+# GET ONLY ACTIVE FARMERS ENDPOINT (Optional)
+# -----------------------------
+@consumer_bp.route('/active-farmers', methods=['GET'])
+def get_active_farmers():
+    """
+    Get only active farmers (explicit endpoint)
+    """
+    try:
+        # Get all active farmers
+        farmers = User.query.filter_by(
+            user_type='farmer',
+            is_active=True
+        ).all()
+        
+        farmers_list = []
+        for farmer in farmers:
+            # Get product count for each farmer
+            product_count = FarmerItem.query.filter_by(farmer_id=farmer.id).count()
+            
+            farmers_list.append({
+                "id": farmer.id,
+                "fullname": farmer.fullname,
+                "location": farmer.location,
+                "email": farmer.email,
+                "product_count": product_count,
+                "latitude": farmer.latitude,
+                "longitude": farmer.longitude,
+                "is_active": farmer.is_active
+            })
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Found {len(farmers_list)} active farmers",
+            "farmers": farmers_list,
+            "count": len(farmers_list)
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting active farmers: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# -----------------------------
 # TEST ENDPOINT
 # -----------------------------
 @consumer_bp.route('/test', methods=['GET'])
@@ -311,12 +376,14 @@ def test_consumer():
     return jsonify({
         "status": "success",
         "message": "Consumer endpoints are working",
+        "note": "All endpoints now filter out inactive farmers (is_active=false)",
         "endpoints": [
             "/consumer/nearby-products?lat=...&lon=... (GET)",
             "/consumer/farmer-details/<id> (GET)",
             "/consumer/profile (GET)",
-            "/consumer/farmers (GET)",
-            "/consumer/farmer/<id>/products (GET)",
-            "/consumer/search?q=...&type=... (GET)"
+            "/consumer/farmers (GET) - only active farmers",
+            "/consumer/farmer/<id>/products (GET) - only if farmer is active",
+            "/consumer/search?q=...&type=... (GET) - only active farmers/products",
+            "/consumer/active-farmers (GET) - explicit active farmers only"
         ]
     })

@@ -1,4 +1,3 @@
-// src/pages/admin/FarmersManagement.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -13,8 +12,7 @@ import {
   MapPin,
   Calendar,
   RefreshCw,
-  Package,
-  LogOut
+  Package
 } from "lucide-react";
 
 const FarmersManagement = () => {
@@ -22,7 +20,7 @@ const FarmersManagement = () => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active"); // Default to active
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [error, setError] = useState("");
 
@@ -37,7 +35,7 @@ const FarmersManagement = () => {
     
     checkAdminAuth();
     fetchFarmers();
-  }, [navigate]);
+  }, [navigate, statusFilter]); // Add statusFilter to dependencies
 
   const checkAdminAuth = async () => {
     try {
@@ -58,11 +56,11 @@ const FarmersManagement = () => {
 
   const fetchFarmers = async () => {
     try {
-      console.log("🔍 Fetching farmers from backend...");
+      console.log(`🔍 Fetching farmers from backend (status: ${statusFilter})...`);
       setLoading(true);
       setError("");
       
-      const res = await axios.get("http://localhost:5001/admin/farmers", {
+      const res = await axios.get(`http://localhost:5001/admin/farmers?status=${statusFilter}`, {
         withCredentials: true,
         timeout: 10000
       });
@@ -87,49 +85,53 @@ const FarmersManagement = () => {
     }
   };
 
-  const handleStatusChange = async (farmerId, newStatus) => {
-    if (!window.confirm(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} this farmer?`)) return;
+  const handleDeactivateFarmer = async (farmerId, farmerName) => {
+    if (!window.confirm(`Are you sure you want to deactivate ${farmerName}? They will be hidden from the system but can be restored later.`)) return;
 
     try {
+      // Use deactivate endpoint
       await axios.put(
-        `http://localhost:5001/admin/farmers/${farmerId}/status`,
-        { status: newStatus },
+        `http://localhost:5001/admin/users/${farmerId}/deactivate`,
+        {},
         { withCredentials: true }
       );
       
       fetchFarmers();
-      alert(`Farmer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
+      alert(`Farmer ${farmerName} has been deactivated!`);
       
     } catch (err) {
-      console.error("Error updating farmer:", err);
-      alert("Failed to update farmer status");
-    }
-  };
-
-  const handleDeleteFarmer = async (farmerId) => {
-    if (!window.confirm("Are you sure you want to delete this farmer? This action cannot be undone.")) return;
-
-    try {
-      // Use the correct endpoint for deleting users
-      await axios.delete(
-        `http://localhost:5001/admin/users/${farmerId}`,
-        { withCredentials: true }
-      );
+      console.error("Error deactivating farmer:", err);
       
-      fetchFarmers();
-      alert("Farmer deleted successfully!");
-      
-    } catch (err) {
-      console.error("Error deleting farmer:", err);
-      
-      // Show specific error message from backend
       if (err.response && err.response.data && err.response.data.error) {
-        alert(`Failed to delete farmer: ${err.response.data.error}`);
+        alert(`Failed to deactivate farmer: ${err.response.data.error}`);
       } else {
-        alert("Failed to delete farmer. Please try again.");
+        alert("Failed to deactivate farmer. Please try again.");
       }
     }
   };
+
+  const handleReactivateFarmer = async (farmerId, farmerName) => {
+    if (!window.confirm(`Are you sure you want to reactivate ${farmerName}?`)) return;
+
+    try {
+      // Use reactivate endpoint
+      await axios.put(
+        `http://localhost:5001/admin/users/${farmerId}/reactivate`,
+        {},
+        { withCredentials: true }
+      );
+      
+      fetchFarmers();
+      alert(`Farmer ${farmerName} has been reactivated!`);
+      
+    } catch (err) {
+      console.error("Error reactivating farmer:", err);
+      alert("Failed to reactivate farmer. Please try again.");
+    }
+  };
+
+  // REMOVE THIS FUNCTION - We're not using hard delete anymore
+  // const handleDeleteFarmer = async (farmerId) => { ... }
 
   const viewFarmerDetails = (farmer) => {
     setSelectedFarmer(farmer);
@@ -141,9 +143,7 @@ const FarmersManagement = () => {
       (farmer.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (farmer.location || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" || farmer.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const formatDate = (dateString) => {
@@ -157,6 +157,19 @@ const FarmersManagement = () => {
     } catch (e) {
       return "Invalid date";
     }
+  };
+
+  const getStatusDisplay = (farmer) => {
+    if (farmer.is_active === false) {
+      return {
+        text: "Inactive",
+        color: "bg-gray-100 text-gray-800"
+      };
+    }
+    return {
+      text: "Active",
+      color: "bg-green-100 text-green-800"
+    };
   };
 
   if (loading) {
@@ -205,7 +218,7 @@ const FarmersManagement = () => {
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Manage Farmers</h2>
               <p className="text-gray-600">
-                Total {farmers.length} farmers registered • Showing {filteredFarmers.length} farmers
+                {statusFilter === 'all' ? 'All' : statusFilter} farmers • Showing {filteredFarmers.length} of {farmers.length} farmers
               </p>
             </div>
             <div className="text-sm text-gray-500">
@@ -242,9 +255,9 @@ const FarmersManagement = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
+                <option value="active">Active Farmers</option>
+                <option value="inactive">Inactive Farmers</option>
+                <option value="all">All Farmers</option>
               </select>
             </div>
           </div>
@@ -281,96 +294,88 @@ const FarmersManagement = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredFarmers.length > 0 ? (
-                  filteredFarmers.map((farmer) => (
-                    <tr key={farmer.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {(farmer.fullname || 'F').charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {farmer.fullname || 'Unknown'}
+                  filteredFarmers.map((farmer) => {
+                    const status = getStatusDisplay(farmer);
+                    return (
+                      <tr key={farmer.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 font-semibold">
+                                {(farmer.fullname || 'F').charAt(0).toUpperCase()}
+                              </span>
                             </div>
-                            <div className="text-sm text-gray-500">
-                              ID: {farmer.id}
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {farmer.fullname || 'Unknown'}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                ID: {farmer.id}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.email || 'No email'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.location || 'Unknown'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          farmer.status === 'active'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {farmer.status || 'active'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Package className="h-4 w-4 mr-2 text-gray-400" />
-                          {farmer.product_count || 0} products
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          {formatDate(farmer.last_login)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => viewFarmerDetails(farmer)}
-                            className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                            title="View Details"
-                          >
-                            <Eye className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(
-                              farmer.id,
-                              farmer.status === 'active' ? 'suspended' : 'active'
-                            )}
-                            className={`p-1 hover:bg-gray-50 rounded ${
-                              farmer.status === 'active'
-                                ? 'text-red-600 hover:text-red-900'
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
-                            title={farmer.status === 'active' ? 'Suspend' : 'Activate'}
-                          >
-                            {farmer.status === 'active' ? (
-                              <UserX className="h-5 w-5" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <Mail className="h-4 w-4 mr-2 text-gray-400" />
+                            {farmer.email || 'No email'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                            {farmer.location || 'Unknown'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
+                            {status.text}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <Package className="h-4 w-4 mr-2 text-gray-400" />
+                            {farmer.product_count || 0} products
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center">
+                            <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                            {formatDate(farmer.last_login)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => viewFarmerDetails(farmer)}
+                              className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                              title="View Details"
+                            >
+                              <Eye className="h-5 w-5" />
+                            </button>
+                            
+                            {farmer.is_active ? (
+                              <button
+                                onClick={() => handleDeactivateFarmer(farmer.id, farmer.fullname)}
+                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
+                                title="Deactivate"
+                              >
+                                <UserX className="h-5 w-5" />
+                              </button>
                             ) : (
-                              <UserCheck className="h-5 w-5" />
+                              <button
+                                onClick={() => handleReactivateFarmer(farmer.id, farmer.fullname)}
+                                className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded"
+                                title="Reactivate"
+                              >
+                                <UserCheck className="h-5 w-5" />
+                              </button>
                             )}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteFarmer(farmer.id)}
-                            className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="7" className="px-6 py-12 text-center">
@@ -437,11 +442,11 @@ const FarmersManagement = () => {
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">Status</p>
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        selectedFarmer.status === 'active'
+                        selectedFarmer.is_active
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {selectedFarmer.status || 'active'}
+                        {selectedFarmer.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
@@ -456,31 +461,27 @@ const FarmersManagement = () => {
 
                   {/* Actions */}
                   <div className="flex space-x-3 pt-4 border-t">
-                    <button
-                      onClick={() => {
-                        handleStatusChange(
-                          selectedFarmer.id,
-                          selectedFarmer.status === 'active' ? 'suspended' : 'active'
-                        );
-                        setSelectedFarmer(null);
-                      }}
-                      className={`flex-1 py-2 px-4 rounded-lg font-medium ${
-                        selectedFarmer.status === 'active'
-                          ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                          : 'bg-green-50 text-green-700 hover:bg-green-100'
-                      }`}
-                    >
-                      {selectedFarmer.status === 'active' ? 'Suspend Account' : 'Activate Account'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDeleteFarmer(selectedFarmer.id);
-                        setSelectedFarmer(null);
-                      }}
-                      className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
-                    >
-                      Delete Account
-                    </button>
+                    {selectedFarmer.is_active ? (
+                      <button
+                        onClick={() => {
+                          handleDeactivateFarmer(selectedFarmer.id, selectedFarmer.fullname);
+                          setSelectedFarmer(null);
+                        }}
+                        className="flex-1 py-2 px-4 bg-red-50 text-red-700 rounded-lg font-medium hover:bg-red-100"
+                      >
+                        Deactivate Account
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          handleReactivateFarmer(selectedFarmer.id, selectedFarmer.fullname);
+                          setSelectedFarmer(null);
+                        }}
+                        className="flex-1 py-2 px-4 bg-green-50 text-green-700 rounded-lg font-medium hover:bg-green-100"
+                      >
+                        Reactivate Account
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

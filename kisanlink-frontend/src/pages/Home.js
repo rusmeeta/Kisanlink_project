@@ -308,7 +308,7 @@ const Home = () => {
       </section>
 
       {/* About Section */}
-      <section id="about" className="py-16 px-4 bg-white">
+      {/* <section id="about" className="py-16 px-4 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
@@ -389,7 +389,7 @@ const Home = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* How It Works Section */}
       <section id="how-it-works" className="py-16 px-4 bg-gradient-to-b from-amber-50 to-white">

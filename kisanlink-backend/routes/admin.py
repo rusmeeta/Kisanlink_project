@@ -148,36 +148,46 @@ def admin_stats():
             'activeListings': 5
         })
 # ========== GET ALL FARMERS ==========
-
 @admin_bp.route('/farmers', methods=['GET'])
 def get_all_farmers():
-    """Get all farmers with their details - REAL DATABASE VERSION"""
+    """Get all farmers with their details"""
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
         print("🔍 Fetching farmers from PostgreSQL database...")
         
-        # Query to get all farmers
-        query = text("""
+        # Get status filter from query parameter
+        status = request.args.get('status', 'active')  # Default: active
+        
+        # Build query based on status filter
+        if status == 'active':
+            where_clause = "WHERE user_type = 'farmer' AND is_active = TRUE"
+        elif status == 'inactive':
+            where_clause = "WHERE user_type = 'farmer' AND is_active = FALSE"
+        else:  # 'all'
+            where_clause = "WHERE user_type = 'farmer'"
+        
+        # Query to get farmers
+        query = text(f"""
             SELECT 
                 id,
                 fullname,
                 email,
                 location,
                 user_type,
-                
+                is_active,
                 COALESCE(login_count, 0) as login_count,
                 last_login
             FROM users 
-            WHERE user_type = 'farmer'
+            {where_clause}
             ORDER BY id DESC
         """)
         
         result = db.session.execute(query)
         farmers_data = result.fetchall()
         
-        print(f"✅ Database query successful, found {len(farmers_data)} farmers")
+        print(f"✅ Database query successful, found {len(farmers_data)} farmers (status: {status})")
         
         # Get product counts for each farmer
         product_counts = {}
@@ -197,11 +207,10 @@ def get_all_farmers():
                 'id': farmer_id,
                 'fullname': farmer.fullname,
                 'email': farmer.email,
-                
                 'location': farmer.location,
                 'user_type': farmer.user_type,
-                
-                
+                'is_active': farmer.is_active,
+                'status': 'active' if farmer.is_active else 'inactive',
                 'login_count': farmer.login_count,
                 'last_login': farmer.last_login.isoformat() if farmer.last_login else None,
                 'product_count': product_counts.get(farmer_id, 0)
@@ -211,7 +220,8 @@ def get_all_farmers():
             'success': True,
             'farmers': farmers_list,
             'count': len(farmers_list),
-            'message': f'Found {len(farmers_list)} farmers from database'
+            'status_filter': status,
+            'message': f'Found {len(farmers_list)} farmers (status: {status})'
         })
         
     except Exception as e:
@@ -219,15 +229,12 @@ def get_all_farmers():
         import traceback
         traceback.print_exc()
         
-        # Return error response, NO SAMPLE DATA
         return jsonify({
             'success': False,
             'error': str(e),
             'farmers': [],
-            'count': 0,
-            'message': 'Database query failed'
+            'count': 0
         })
-    
 # ========== GET ALL CONSUMERS ==========
 
 @admin_bp.route('/consumers', methods=['GET'])
@@ -500,58 +507,58 @@ def get_recent_products():
             'count': 0
         })
     
-# ========== DELETE USER (Farmer or Consumer) ==========
+# # ========== DELETE USER (Farmer or Consumer) ==========
 
-@admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    """Delete a user (farmer or consumer)"""
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Not authenticated'}), 401
+# @admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
+# def delete_user(user_id):
+#     """Delete a user (farmer or consumer)"""
+#     if not session.get('admin_logged_in'):
+#         return jsonify({'error': 'Not authenticated'}), 401
     
-    try:
-        print(f"🗑️ Attempting to delete user ID: {user_id}")
+#     try:
+#         print(f"🗑️ Attempting to delete user ID: {user_id}")
         
-        # First, check if user exists
-        check_query = text("SELECT id, user_type FROM users WHERE id = :user_id")
-        result = db.session.execute(check_query, {'user_id': user_id})
-        user = result.fetchone()
+#         # First, check if user exists
+#         check_query = text("SELECT id, user_type FROM users WHERE id = :user_id")
+#         result = db.session.execute(check_query, {'user_id': user_id})
+#         user = result.fetchone()
         
-        if not user:
-            return jsonify({
-                'success': False,
-                'error': 'User not found'
-            }), 404
+#         if not user:
+#             return jsonify({
+#                 'success': False,
+#                 'error': 'User not found'
+#             }), 404
         
-        # If user is a farmer, check if they have products
-        if user.user_type == 'farmer':
-            product_query = text("SELECT COUNT(*) FROM farmer_items WHERE farmer_id = :user_id")
-            product_count = db.session.execute(product_query, {'user_id': user_id}).scalar()
+#         # If user is a farmer, check if they have products
+#         if user.user_type == 'farmer':
+#             product_query = text("SELECT COUNT(*) FROM farmer_items WHERE farmer_id = :user_id")
+#             product_count = db.session.execute(product_query, {'user_id': user_id}).scalar()
             
-            if product_count > 0:
-                return jsonify({
-                    'success': False,
-                    'error': f'Cannot delete farmer with {product_count} products. Delete products first.'
-                }), 400
+#             if product_count > 0:
+#                 return jsonify({
+#                     'success': False,
+#                     'error': f'Cannot delete farmer with {product_count} products. Delete products first.'
+#                 }), 400
         
-        # Delete the user
-        delete_query = text("DELETE FROM users WHERE id = :user_id")
-        db.session.execute(delete_query, {'user_id': user_id})
-        db.session.commit()
+#         # Delete the user
+#         delete_query = text("DELETE FROM users WHERE id = :user_id")
+#         db.session.execute(delete_query, {'user_id': user_id})
+#         db.session.commit()
         
-        print(f"✅ User {user_id} deleted successfully")
+#         print(f"✅ User {user_id} deleted successfully")
         
-        return jsonify({
-            'success': True,
-            'message': 'User deleted successfully'
-        })
+#         return jsonify({
+#             'success': True,
+#             'message': 'User deleted successfully'
+#         })
         
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ Delete user error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+#     except Exception as e:
+#         db.session.rollback()
+#         print(f"❌ Delete user error: {str(e)}")
+#         return jsonify({
+#             'success': False,
+#             'error': str(e)
+#         }), 500
 
 # ========== DELETE PRODUCT ==========
 
@@ -853,4 +860,130 @@ def notify_low_stock():
         return jsonify({
             'success': False,
             'error': 'Failed to send notification. Please try again.'
+        }), 500
+    
+# ========== DEACTIVATE USER (Soft Delete - Make Inactive) ==========
+
+@admin_bp.route('/users/<int:user_id>/deactivate', methods=['PUT'])
+def deactivate_user(user_id):
+    """Deactivate a user (make inactive instead of deleting)"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print(f"🔒 Attempting to deactivate user ID: {user_id}")
+        
+        # First, check if user exists
+        check_query = text("""
+            SELECT id, fullname, email, user_type, is_active 
+            FROM users 
+            WHERE id = :user_id
+        """)
+        result = db.session.execute(check_query, {'user_id': user_id})
+        user = result.fetchone()
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # Check if user is already inactive
+        if not user.is_active:
+            return jsonify({
+                'success': False,
+                'error': 'User is already inactive'
+            }), 400
+        
+        # Soft delete: Set is_active = FALSE
+        deactivate_query = text("""
+            UPDATE users 
+            SET is_active = FALSE 
+            WHERE id = :user_id
+        """)
+        db.session.execute(deactivate_query, {'user_id': user_id})
+        db.session.commit()
+        
+        print(f"✅ User {user_id} ({user.fullname}) deactivated successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': f'User {user.fullname} has been deactivated',
+            'user': {
+                'id': user.id,
+                'name': user.fullname,
+                'email': user.email,
+                'is_active': False
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Deactivate user error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========== REACTIVATE USER ==========
+
+@admin_bp.route('/users/<int:user_id>/reactivate', methods=['PUT'])
+def reactivate_user(user_id):
+    """Reactivate an inactive user"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print(f"♻️ Attempting to reactivate user ID: {user_id}")
+        
+        # First, check if user exists
+        check_query = text("""
+            SELECT id, fullname, email, user_type, is_active 
+            FROM users 
+            WHERE id = :user_id
+        """)
+        result = db.session.execute(check_query, {'user_id': user_id})
+        user = result.fetchone()
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # Check if user is already active
+        if user.is_active:
+            return jsonify({
+                'success': False,
+                'error': 'User is already active'
+            }), 400
+        
+        # Reactivate: Set is_active = TRUE
+        reactivate_query = text("""
+            UPDATE users 
+            SET is_active = TRUE 
+            WHERE id = :user_id
+        """)
+        db.session.execute(reactivate_query, {'user_id': user_id})
+        db.session.commit()
+        
+        print(f"✅ User {user_id} ({user.fullname}) reactivated successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': f'User {user.fullname} has been reactivated',
+            'user': {
+                'id': user.id,
+                'name': user.fullname,
+                'email': user.email,
+                'is_active': True
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Reactivate user error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
