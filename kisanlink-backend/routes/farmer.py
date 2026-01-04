@@ -471,10 +471,11 @@ def get_products():
         return jsonify({"error": str(e)}), 500
 
 # ------------------ Update Product ------------------
+# ------------------ Update Product (with approval) ------------------
 @farmer_bp.route("/update-product/<int:product_id>", methods=["PUT"])
 def update_product(product_id):
     """
-    Update a product for the logged-in farmer
+    Update a product - creates an edit request that needs admin approval
     """
     try:
         farmer_id = session.get("user_id")
@@ -483,55 +484,140 @@ def update_product(product_id):
 
         conn = get_db_connection()
         cur = conn.cursor()
-        # Fetch product to check ownership
-        cur.execute("SELECT farmer_id, photo_path FROM farmer_items WHERE id=%s", (product_id,))
+        
+        # 1. Check if product exists and belongs to farmer
+        cur.execute("""
+            SELECT id, item_name, price, location, min_order_qty, 
+                   available_stock, photo_path, status, is_approved
+            FROM farmer_items 
+            WHERE id=%s AND farmer_id=%s
+        """, (product_id, farmer_id))
+        
         product = cur.fetchone()
         if not product:
-            return jsonify({"error": "Product not found"}), 404
-        if product[0] != farmer_id:
-            return jsonify({"error": "Unauthorized"}), 403
-
-        # Get updated fields
-        item_name = request.form.get("item_name")
-        price = float(request.form.get("price"))
-        location = request.form.get("location")
-        min_order_qty = int(request.form.get("min_order_qty"))
-        available_stock = int(request.form.get("available_stock"))
-
-        old_photo = product[1]
+            return jsonify({"error": "Product not found or unauthorized"}), 404
+        
+        # 2. Check if product is approved
+        if not product[8]:
+            return jsonify({"error": "Cannot edit a product that is not approved"}), 400
+        
+        # 3. Check if there's already a pending edit
+        cur.execute("SELECT has_pending_edit FROM farmer_items WHERE id=%s", (product_id,))
+        has_pending_result = cur.fetchone()
+        
+        if has_pending_result and has_pending_result[0]:
+            return jsonify({"error": "This product already has a pending edit request"}), 400
+        
+        # 4. Get current product data
+        current_data = {
+            "item_name": product[1],
+            "price": float(product[2]),
+            "location": product[3],
+            "min_order_qty": product[4] or 1,
+            "available_stock": product[5] or 0,
+            "photo_path": product[6]
+        }
+        
+        # 5. Get updated fields from form
+        item_name = request.form.get("item_name", "").strip()
+        price = request.form.get("price", "").strip()
+        location = request.form.get("location", "").strip()
+        min_order_qty = request.form.get("min_order_qty", "").strip()
+        available_stock = request.form.get("available_stock", "").strip()
         photo = request.files.get("photo")
-        # Save new photo if uploaded, else keep old
+        
+        # 6. Validate required fields
+        if not item_name:
+            return jsonify({"error": "Item name is required"}), 400
+        if not price:
+            return jsonify({"error": "Price is required"}), 400
+        if not location:
+            return jsonify({"error": "Location is required"}), 400
+        
+        try:
+            price = float(price)
+            if price <= 0:
+                return jsonify({"error": "Price must be greater than 0"}), 400
+        except ValueError:
+            return jsonify({"error": "Invalid price format"}), 400
+        
+        # Handle optional fields
+        try:
+            min_order_qty = int(min_order_qty) if min_order_qty else current_data["min_order_qty"]
+            available_stock = int(available_stock) if available_stock else current_data["available_stock"]
+        except ValueError:
+            return jsonify({"error": "Invalid number format for quantity or stock"}), 400
+        
+        if min_order_qty <= 0:
+            return jsonify({"error": "Minimum order quantity must be greater than 0"}), 400
+        
+        if available_stock < 0:
+            return jsonify({"error": "Available stock cannot be negative"}), 400
+        
+        # 7. Handle photo upload
+        proposed_photo_path = current_data["photo_path"]
         if photo and allowed_file(photo.filename):
             filename = secure_filename(photo.filename)
             photo.save(os.path.join(UPLOAD_FOLDER, filename))
-            photo_to_save = filename
-        else:
-            photo_to_save = old_photo
-
+            proposed_photo_path = filename
+        
+        # 8. Get coordinates for location
         latitude, longitude = location_coords.get(location, (None, None))
-
-        # Update product in database
+        
+        # 9. Create edit request in database (16 columns, 16 values)
         cur.execute("""
-            UPDATE farmer_items
-            SET item_name=%s, price=%s, location=%s, min_order_qty=%s, available_stock=%s, photo_path=%s, latitude=%s, longitude=%s
-            WHERE id=%s
-        """, (item_name, price, location, min_order_qty, available_stock, photo_to_save, latitude, longitude, product_id))
-
+            INSERT INTO product_edit_requests (
+                product_id, farmer_id,
+                current_item_name, current_price, current_location, 
+                current_min_order_qty, current_available_stock, current_photo_path,
+                proposed_item_name, proposed_price, proposed_location,
+                proposed_min_order_qty, proposed_available_stock, proposed_photo_path,
+                proposed_latitude, proposed_longitude
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            product_id, farmer_id,
+            current_data["item_name"], current_data["price"], current_data["location"],
+            current_data["min_order_qty"], current_data["available_stock"], current_data["photo_path"],
+            item_name, price, location,
+            min_order_qty, available_stock, proposed_photo_path,
+            latitude, longitude
+        ))
+        
+        edit_request_id = cur.fetchone()[0]
+        
+        # 10. Mark product as having pending edit
+        cur.execute("""
+            UPDATE farmer_items 
+            SET has_pending_edit = TRUE,
+                edit_status = 'edit_pending',
+                edit_requested_at = NOW()
+            WHERE id = %s
+        """, (product_id,))
+        
         conn.commit()
+        
         cur.close()
         conn.close()
-
-        return jsonify({"message": "Product updated successfully"}), 200
+        
+        return jsonify({
+            "success": True,
+            "message": "Edit request submitted successfully! Waiting for admin approval.",
+            "edit_request_id": edit_request_id,
+            "status": "edit_pending",
+            "product_id": product_id
+        }), 200
 
     except Exception as e:
-        print("ERROR:", e)
-        return jsonify({"error": str(e)}), 500
-
-# ------------------ Delete Product ------------------
-@farmer_bp.route("/delete-product/<int:product_id>", methods=["DELETE"])
-def delete_product(product_id):
+        print("ERROR in update_product:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+# ------------------ Get Pending Edit Requests ------------------
+@farmer_bp.route("/edit-requests/pending", methods=["GET"])
+def get_pending_edit_requests():
     """
-    Delete a product for the logged-in farmer
+    Get all pending edit requests for the farmer
     """
     try:
         farmer_id = session.get("user_id")
@@ -540,21 +626,93 @@ def delete_product(product_id):
 
         conn = get_db_connection()
         cur = conn.cursor()
-        # Check ownership
-        cur.execute("SELECT farmer_id FROM farmer_items WHERE id=%s", (product_id,))
-        product = cur.fetchone()
-        if not product:
-            return jsonify({"error": "Product not found"}), 404
-        if product[0] != farmer_id:
-            return jsonify({"error": "Unauthorized"}), 403
+        
+        cur.execute("""
+            SELECT 
+                er.id as request_id,
+                er.product_id,
+                er.requested_at,
+                fi.item_name as current_name,
+                er.proposed_item_name as proposed_name,
+                er.current_price,
+                er.proposed_price,
+                er.current_location,
+                er.proposed_location,
+                er.edit_status
+            FROM product_edit_requests er
+            JOIN farmer_items fi ON er.product_id = fi.id
+            WHERE er.farmer_id = %s 
+            AND er.edit_status = 'edit_pending'
+            ORDER BY er.requested_at DESC
+        """, (farmer_id,))
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        edit_requests = []
+        for row in rows:
+            edit_requests.append({
+                "id": row[0],
+                "product_id": row[1],
+                "requested_at": row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else None,
+                "current_name": row[3],
+                "proposed_name": row[4],
+                "current_price": float(row[5]) if row[5] else 0,
+                "proposed_price": float(row[6]) if row[6] else 0,
+                "current_location": row[7],
+                "proposed_location": row[8],
+                "status": row[9],
+                "time_ago": get_time_ago(row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else "")
+            })
+        
+        return jsonify({"edit_requests": edit_requests, "count": len(edit_requests)}), 200
 
-        # Delete product
-        cur.execute("DELETE FROM farmer_items WHERE id=%s", (product_id,))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ------------------ Cancel Edit Request ------------------
+@farmer_bp.route("/edit-request/<int:request_id>/cancel", methods=["DELETE"])
+def cancel_edit_request(request_id):
+    """
+    Cancel a pending edit request
+    """
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if request exists and belongs to farmer
+        cur.execute("""
+            SELECT er.id, er.product_id 
+            FROM product_edit_requests er
+            WHERE er.id = %s AND er.farmer_id = %s
+        """, (request_id, farmer_id))
+        
+        request_data = cur.fetchone()
+        if not request_data:
+            return jsonify({"error": "Edit request not found or unauthorized"}), 404
+        
+        product_id = request_data[1]
+        
+        # Delete the edit request
+        cur.execute("DELETE FROM product_edit_requests WHERE id = %s", (request_id,))
+        
+        # Update product to remove pending edit flag
+        cur.execute("""
+            UPDATE farmer_items 
+            SET has_pending_edit = FALSE,
+                edit_status = NULL
+            WHERE id = %s
+        """, (product_id,))
+        
         conn.commit()
         cur.close()
         conn.close()
-
-        return jsonify({"message": "Product deleted successfully"}), 200
+        
+        return jsonify({"message": "Edit request cancelled successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

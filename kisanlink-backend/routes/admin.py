@@ -2177,3 +2177,299 @@ def delete_low_stock_product(product_id):
             'success': False,
             'error': str(e)
         }), 500
+    
+# ========== PRODUCT EDIT APPROVAL (Admin) ==========
+
+# Get all pending edit requests
+@admin_bp.route('/edit-requests/pending', methods=['GET'])
+def get_pending_edit_requests():
+    """Get all pending edit requests from farmers"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        query = text("""
+            SELECT 
+                er.id as request_id,
+                er.product_id,
+                er.farmer_id,
+                u.fullname as farmer_name,
+                u.email as farmer_email,
+                
+                -- Current product data
+                er.current_item_name,
+                er.current_price,
+                er.current_location,
+                er.current_min_order_qty,
+                er.current_available_stock,
+                er.current_photo_path,
+                
+                -- Proposed changes
+                er.proposed_item_name,
+                er.proposed_price,
+                er.proposed_location,
+                er.proposed_min_order_qty,
+                er.proposed_available_stock,
+                er.proposed_photo_path,
+                er.proposed_latitude,
+                er.proposed_longitude,
+                
+                -- Request metadata
+                er.requested_at,
+                er.edit_status
+                
+            FROM product_edit_requests er
+            JOIN users u ON er.farmer_id = u.id
+            WHERE er.edit_status = 'edit_pending'
+            ORDER BY er.requested_at DESC
+        """)
+        
+        result = db.session.execute(query)
+        requests = result.fetchall()
+        
+        requests_list = []
+        for req in requests:
+            requests_list.append({
+                'request_id': req.request_id,
+                'product_id': req.product_id,
+                'farmer_id': req.farmer_id,
+                'farmer_name': req.farmer_name,
+                'farmer_email': req.farmer_email,
+                
+                'current_data': {
+                    'item_name': req.current_item_name,
+                    'price': float(req.current_price),
+                    'location': req.current_location,
+                    'min_order_qty': req.current_min_order_qty,
+                    'available_stock': req.current_available_stock,
+                    'photo_path': req.current_photo_path
+                },
+                
+                'proposed_data': {
+                    'item_name': req.proposed_item_name,
+                    'price': float(req.proposed_price),
+                    'location': req.proposed_location,
+                    'min_order_qty': req.proposed_min_order_qty,
+                    'available_stock': req.proposed_available_stock,
+                    'photo_path': req.proposed_photo_path,
+                    'latitude': req.proposed_latitude,
+                    'longitude': req.proposed_longitude
+                },
+                
+                'requested_at': req.requested_at.isoformat() if req.requested_at else None,
+                'status': req.edit_status
+            })
+        
+        return jsonify({
+            'success': True,
+            'edit_requests': requests_list,
+            'count': len(requests_list)
+        })
+        
+    except Exception as e:
+        print(f"❌ Get pending edit requests error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Approve edit request
+@admin_bp.route('/edit-requests/<int:request_id>/approve', methods=['POST'])
+def approve_edit_request(request_id):
+    """Approve a product edit request"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        admin_id = session.get('admin_id')
+        
+        # Get edit request details
+        query = text("""
+            SELECT 
+                er.product_id,
+                er.farmer_id,
+                er.proposed_item_name,
+                er.proposed_price,
+                er.proposed_location,
+                er.proposed_min_order_qty,
+                er.proposed_available_stock,
+                er.proposed_photo_path,
+                er.proposed_latitude,
+                er.proposed_longitude,
+                fi.item_name as current_name
+            FROM product_edit_requests er
+            JOIN farmer_items fi ON er.product_id = fi.id
+            WHERE er.id = :request_id
+        """)
+        
+        result = db.session.execute(query, {'request_id': request_id})
+        edit_request = result.fetchone()
+        
+        if not edit_request:
+            return jsonify({'success': False, 'error': 'Edit request not found'}), 404
+        
+        # Update the product with proposed changes
+        update_query = text("""
+            UPDATE farmer_items 
+            SET 
+                item_name = :item_name,
+                price = :price,
+                location = :location,
+                min_order_qty = :min_order_qty,
+                available_stock = :available_stock,
+                photo_path = :photo_path,
+                latitude = :latitude,
+                longitude = :longitude,
+                has_pending_edit = FALSE,
+                edit_status = 'edit_approved',
+                approved_by = :admin_id,
+                approved_at = NOW()
+            WHERE id = :product_id
+        """)
+        
+        db.session.execute(update_query, {
+            'product_id': edit_request.product_id,
+            'item_name': edit_request.proposed_item_name,
+            'price': edit_request.proposed_price,
+            'location': edit_request.proposed_location,
+            'min_order_qty': edit_request.proposed_min_order_qty,
+            'available_stock': edit_request.proposed_available_stock,
+            'photo_path': edit_request.proposed_photo_path,
+            'latitude': edit_request.proposed_latitude,
+            'longitude': edit_request.proposed_longitude,
+            'admin_id': admin_id
+        })
+        
+        # Update edit request status
+        update_request_query = text("""
+            UPDATE product_edit_requests 
+            SET 
+                edit_status = 'edit_approved',
+                reviewed_by = :admin_id,
+                reviewed_at = NOW()
+            WHERE id = :request_id
+        """)
+        
+        db.session.execute(update_request_query, {
+            'request_id': request_id,
+            'admin_id': admin_id
+        })
+        
+        # Create notification for farmer
+        notification_message = f"✅ Edit Approved: Your changes to '{edit_request.current_name}' have been approved!"
+        
+        try:
+            notification_query = text("""
+                INSERT INTO notifications (user_id, message, target_role, created_at)
+                VALUES (:user_id, :message, :target_role, NOW())
+            """)
+            db.session.execute(notification_query, {
+                'user_id': edit_request.farmer_id,
+                'message': notification_message,
+                'target_role': 'farmer'
+            })
+        except Exception as notify_error:
+            print(f"Notification error: {notify_error}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Edit request approved successfully',
+            'product_updated': True,
+            'product_id': edit_request.product_id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Approve edit request error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Reject edit request
+@admin_bp.route('/edit-requests/<int:request_id>/reject', methods=['POST'])
+def reject_edit_request(request_id):
+    """Reject a product edit request"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json()
+        reason = data.get('reason', '').strip()
+        admin_id = session.get('admin_id')
+        
+        if not reason:
+            return jsonify({'success': False, 'error': 'Rejection reason is required'}), 400
+        
+        # Get edit request details
+        query = text("""
+            SELECT 
+                er.product_id,
+                er.farmer_id,
+                er.current_item_name as current_name
+            FROM product_edit_requests er
+            WHERE er.id = :request_id
+        """)
+        
+        result = db.session.execute(query, {'request_id': request_id})
+        edit_request = result.fetchone()
+        
+        if not edit_request:
+            return jsonify({'success': False, 'error': 'Edit request not found'}), 404
+        
+        # Update product to remove pending edit flag
+        update_product_query = text("""
+            UPDATE farmer_items 
+            SET 
+                has_pending_edit = FALSE,
+                edit_status = 'edit_rejected'
+            WHERE id = :product_id
+        """)
+        
+        db.session.execute(update_product_query, {
+            'product_id': edit_request.product_id
+        })
+        
+        # Update edit request status
+        update_request_query = text("""
+            UPDATE product_edit_requests 
+            SET 
+                edit_status = 'edit_rejected',
+                reviewed_by = :admin_id,
+                reviewed_at = NOW(),
+                rejection_reason = :reason
+            WHERE id = :request_id
+        """)
+        
+        db.session.execute(update_request_query, {
+            'request_id': request_id,
+            'admin_id': admin_id,
+            'reason': reason
+        })
+        
+        # Create notification for farmer
+        notification_message = f"❌ Edit Rejected: Your changes to '{edit_request.current_name}' were rejected. Reason: {reason}"
+        
+        try:
+            notification_query = text("""
+                INSERT INTO notifications (user_id, message, target_role, created_at)
+                VALUES (:user_id, :message, :target_role, NOW())
+            """)
+            db.session.execute(notification_query, {
+                'user_id': edit_request.farmer_id,
+                'message': notification_message,
+                'target_role': 'farmer'
+            })
+        except Exception as notify_error:
+            print(f"Notification error: {notify_error}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Edit request rejected',
+            'rejection_reason': reason
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Reject edit request error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -131,44 +131,50 @@ const ProductList = ({ isAdmin = false }) => {
   };
 
   // Farmer update
-  const handleUpdate = async (id) => {
-    if (!isAdmin) {
-      setIsUpdating(true);
-      try {
-        const formData = new FormData();
-        formData.append("item_name", editForm.item_name);
-        formData.append("price", editForm.price);
-        formData.append("location", editForm.location);
-        formData.append("min_order_qty", editForm.min_order_qty);
-        formData.append("available_stock", editForm.available_stock);
+ // In your handleUpdate function:
+const handleUpdate = async (id) => {
+  if (!isAdmin) {
+    setIsUpdating(true);
+    try {
+      const formData = new FormData();
+      formData.append("item_name", editForm.item_name);
+      formData.append("price", editForm.price);
+      formData.append("location", editForm.location);
+      formData.append("min_order_qty", editForm.min_order_qty);
+      formData.append("available_stock", editForm.available_stock);
 
-        if (newPhoto) formData.append("photo", newPhoto);
+      if (newPhoto) formData.append("photo", newPhoto);
 
-        const res = await axios.put(
-          `http://localhost:5001/farmer/update-product/${id}`,
-          formData,
-          {
-            headers: { "Content-Type": "multipart/form-data" },
-            withCredentials: true,
-          }
-        );
+      const res = await axios.put(
+        `http://localhost:5001/farmer/update-product/${id}`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          withCredentials: true,
+        }
+      );
 
-        alert(res.data.message);
+      if (res.data.success) {
+        alert(res.data.message || "Edit request submitted successfully!");
         setEditingId(null);
         setNewPhoto(null);
         setPreviewPhoto(null);
         fetchProducts();
-      } catch (err) {
-        console.error("Update error:", err.response?.data || err);
-        alert(err.response?.data?.error || "Error updating product");
-      } finally {
-        setIsUpdating(false);
+      } else {
+        alert(res.data.error || "Error submitting edit request");
       }
+      
+    } catch (err) {
+      console.error("Update error:", err.response?.data || err);
+      alert(err.response?.data?.error || "Error submitting edit request");
+    } finally {
+      setIsUpdating(false);
     }
-  };
+  }
+};
 
   // Status badge component
-  const StatusBadge = ({ status, rejectionReason }) => {
+  const StatusBadge = ({ status, rejectionReason, hasPendingEdit = false }) => {
     const statusConfig = {
       approved: { 
         color: "bg-green-100 text-green-800", 
@@ -189,10 +195,20 @@ const ProductList = ({ isAdmin = false }) => {
         color: "bg-yellow-100 text-yellow-800", 
         icon: <Clock size={14} className="mr-1" />, 
         label: "Pending" 
+      },
+      edit_pending: {
+        color: "bg-blue-100 text-blue-800",
+        icon: <Edit2 size={14} className="mr-1" />,
+        label: "Edit Pending"
       }
     };
     
-    const config = statusConfig[status] || statusConfig.pending;
+    let config = statusConfig[status] || statusConfig.pending;
+    
+    // Override if there's a pending edit
+    if (hasPendingEdit && status === 'approved') {
+      config = statusConfig.edit_pending;
+    }
     
     return (
       <div>
@@ -444,6 +460,7 @@ const ProductList = ({ isAdmin = false }) => {
                         <StatusBadge 
                           status={editForm.status || product.status} 
                           rejectionReason={editForm.rejection_reason || product.rejection_reason}
+                          hasPendingEdit={product.has_pending_edit}
                         />
                       </td>
                       <td className="py-4 px-6">
@@ -476,7 +493,11 @@ const ProductList = ({ isAdmin = false }) => {
                               )}
                             </button>
                             <button
-                              onClick={() => setEditingId(null)}
+                              onClick={() => {
+                                setEditingId(null);
+                                setNewPhoto(null);
+                                setPreviewPhoto(null);
+                              }}
                               className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors"
                             >
                               <X size={16} />
@@ -528,6 +549,7 @@ const ProductList = ({ isAdmin = false }) => {
                         <StatusBadge 
                           status={product.status} 
                           rejectionReason={product.rejection_reason}
+                          hasPendingEdit={product.has_pending_edit}
                         />
                       </td>
                       <td className="py-4 px-6">

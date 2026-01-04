@@ -387,3 +387,5 @@ def test_consumer():
             "/consumer/active-farmers (GET) - explicit active farmers only"
         ]
     })
+
+

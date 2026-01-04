@@ -36,6 +36,7 @@ import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
 import PendingProducts from './pages/admin/PendingProducts';
 import LowStockProducts from './pages/admin/LowStockProducts';
+import EditRequestsPage from './pages/admin/EditRequestsPage';
 
 import VerificationSuccess from "./pages/VerificationSuccess";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -134,6 +135,7 @@ function App() {
         
         } />
         <Route path="/admin/low-stock-products" element={<LowStockProducts />} />
+        <Route path="/admin/edit-requests" element={<EditRequestsPage />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

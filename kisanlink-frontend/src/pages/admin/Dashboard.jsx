@@ -20,7 +20,10 @@ import {
   UserCheck,
   UserX,
   Percent,
-  Activity
+  Activity,
+  Edit2,
+  Check,
+  X
 } from "lucide-react";
 import axios from "axios";
 
@@ -42,7 +45,11 @@ const AdminDashboard = () => {
   });
   const [recentFarmers, setRecentFarmers] = useState([]);
   const [recentProducts, setRecentProducts] = useState([]);
+  const [pendingEditRequests, setPendingEditRequests] = useState([]);
+  const [selectedEditRequest, setSelectedEditRequest] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [timeframe, setTimeframe] = useState("today");
   const [adminName, setAdminName] = useState("Admin");
@@ -71,6 +78,19 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadEditRequests = async () => {
+    try {
+      const response = await axios.get("http://localhost:5001/admin/edit-requests/pending", {
+        withCredentials: true
+      });
+      if (response.data.success) {
+        setPendingEditRequests(response.data.edit_requests || []);
+      }
+    } catch (err) {
+      console.error("Error loading edit requests:", err);
+    }
+  };
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -96,10 +116,65 @@ const AdminDashboard = () => {
       });
       setRecentProducts(productsResponse.data.products || []);
 
+      // Load pending edit requests
+      await loadEditRequests();
+
     } catch (err) {
       console.error("Error loading dashboard:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveEditRequest = async (requestId) => {
+    try {
+      setIsProcessing(true);
+      const response = await axios.post(
+        `http://localhost:5001/admin/edit-requests/${requestId}/approve`,
+        {},
+        { withCredentials: true }
+      );
+      
+      if (response.data.success) {
+        alert("Edit request approved successfully!");
+        loadEditRequests();
+        loadDashboardData(); // Refresh stats
+        setSelectedEditRequest(null);
+      }
+    } catch (err) {
+      console.error("Error approving edit request:", err);
+      alert(err.response?.data?.error || "Error approving edit request");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRejectEditRequest = async (requestId) => {
+    if (!rejectReason.trim()) {
+      alert("Please provide a rejection reason");
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      const response = await axios.post(
+        `http://localhost:5001/admin/edit-requests/${requestId}/reject`,
+        { reason: rejectReason },
+        { withCredentials: true }
+      );
+      
+      if (response.data.success) {
+        alert("Edit request rejected!");
+        loadEditRequests();
+        loadDashboardData(); // Refresh stats
+        setSelectedEditRequest(null);
+        setRejectReason("");
+      }
+    } catch (err) {
+      console.error("Error rejecting edit request:", err);
+      alert(err.response?.data?.error || "Error rejecting edit request");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -124,6 +199,20 @@ const AdminDashboard = () => {
       });
     } catch {
       return "Invalid date";
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "";
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateString;
     }
   };
 
@@ -266,7 +355,7 @@ const AdminDashboard = () => {
           
           <StatCard
             title="Pending Approvals"
-            value={stats.pendingProducts}
+            value={stats.pendingProducts + pendingEditRequests.length}
             change={-3}
             icon={<Clock className="h-6 w-6 text-orange-600" />}
             color="bg-orange-100"
@@ -297,11 +386,15 @@ const AdminDashboard = () => {
             />
             
             <QuickAction
-              title="Manage Farmers"
-              description={`Manage ${stats.totalFarmers} farmer accounts`}
-              icon={<UserCheck className="h-6 w-6 text-green-600" />}
-              color="bg-green-100"
-              link="/admin/farmers"
+              title="Review Edits"
+              description={`${pendingEditRequests.length} edit requests pending`}
+              icon={<Edit2 className="h-6 w-6 text-blue-600" />}
+              color="bg-blue-100"
+              link="/admin/edit-requests"
+              badge={{ 
+                text: `${pendingEditRequests.length} Pending`, 
+                color: "bg-blue-100 text-blue-800" 
+              }}
             />
             
             <QuickAction
@@ -314,14 +407,90 @@ const AdminDashboard = () => {
             />
             
             <QuickAction
-              title="View Analytics"
-              description="Platform performance insights"
-              icon={<TrendingUp className="h-6 w-6 text-purple-600" />}
-              color="bg-purple-100"
-              link="#"
+              title="Manage Farmers"
+              description={`Manage ${stats.totalFarmers} farmer accounts`}
+              icon={<UserCheck className="h-6 w-6 text-green-600" />}
+              color="bg-green-100"
+              link="/admin/farmers"
             />
           </div>
         </div>
+
+        {/* Pending Edit Requests Section */}
+        {pendingEditRequests.length > 0 && (
+          <div id="edit-requests" className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Pending Edit Requests</h3>
+                <p className="text-sm text-gray-600">
+                  {pendingEditRequests.length} product edit{pendingEditRequests.length !== 1 ? 's' : ''} waiting for approval
+                </p>
+              </div>
+              <div className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
+                Action Required
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {pendingEditRequests.slice(0, 3).map((request) => (
+                <div key={request.request_id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center mb-2">
+                        <Edit2 className="h-4 w-4 text-blue-600 mr-2" />
+                        <h4 className="font-medium text-gray-900">
+                          {request.current_data.item_name} → {request.proposed_data.item_name}
+                        </h4>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Farmer:</span>
+                          {request.farmer_name}
+                        </div>
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Price:</span>
+                          ₹{request.current_data.price} → ₹{request.proposed_data.price}
+                        </div>
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Requested:</span>
+                          {formatDateTime(request.requested_at)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col space-y-2">
+                      <button
+                        onClick={() => setSelectedEditRequest(request)}
+                        className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm flex items-center"
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => handleApproveEditRequest(request.request_id)}
+                        disabled={isProcessing}
+                        className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm flex items-center"
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Approve
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {pendingEditRequests.length > 3 && (
+                <div className="text-center pt-2">
+                  <button
+                    onClick={() => {/* You can create a separate page for all edit requests */}}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    View all {pendingEditRequests.length} edit requests →
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Detailed Stats & Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -359,6 +528,19 @@ const AdminDashboard = () => {
                           <div 
                             className="h-full bg-orange-500 rounded-full"
                             style={{ width: `${(stats.pendingProducts / stats.totalProducts) * 100 || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Pending Edits</span>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{pendingEditRequests.length}</span>
+                        <div className="ml-2 h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${(pendingEditRequests.length / stats.totalProducts) * 100 || 0}%` }}
                           />
                         </div>
                       </div>
@@ -524,6 +706,24 @@ const AdminDashboard = () => {
                   </div>
                 </Link>
                 
+                {pendingEditRequests.length > 0 && (
+                  <button
+                    onClick={() => document.getElementById('edit-requests')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="w-full flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group"
+                  >
+                    <div className="flex items-center">
+                      <Edit2 className="h-5 w-5 text-blue-600 mr-3" />
+                      <span className="font-medium text-gray-900">Review Edits</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="mr-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        {pendingEditRequests.length}
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600" />
+                    </div>
+                  </button>
+                )}
+                
                 <Link to="/admin/low-stock-products" className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors group">
                   <div className="flex items-center">
                     <AlertTriangle className="h-5 w-5 text-red-600 mr-3" />
@@ -545,14 +745,6 @@ const AdminDashboard = () => {
                     <span className="font-medium text-gray-900">Manage Farmers</span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600" />
-                </Link>
-                
-                <Link to="/admin/consumers" className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group">
-                  <div className="flex items-center">
-                    <ShoppingCart className="h-5 w-5 text-purple-600 mr-3" />
-                    <span className="font-medium text-gray-900">Manage Consumers</span>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-purple-600" />
                 </Link>
               </div>
             </div>
@@ -579,6 +771,167 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Request Detail Modal */}
+      {selectedEditRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Edit Request Details</h3>
+                  <p className="text-gray-600">Request ID: {selectedEditRequest.request_id}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedEditRequest(null);
+                    setRejectReason('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Current Data */}
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-red-800 mb-3 flex items-center">
+                    <AlertTriangle size={18} className="mr-2" />
+                    Current Product Data
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-sm text-gray-600">Name:</span>
+                      <p className="font-medium">{selectedEditRequest.current_data.item_name}</p>
+                    </div>
+                    <div className="flex items-center">
+                      <DollarSign size={14} className="mr-1 text-gray-500" />
+                      <span className="text-sm text-gray-600 mr-2">Price:</span>
+                      <p className="font-medium">₹{selectedEditRequest.current_data.price}</p>
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin size={14} className="mr-1 text-gray-500" />
+                      <span className="text-sm text-gray-600 mr-2">Location:</span>
+                      <p className="font-medium">{selectedEditRequest.current_data.location}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-600">Stock:</span>
+                      <p className="font-medium">{selectedEditRequest.current_data.available_stock} units</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-600">Min Order:</span>
+                      <p className="font-medium">{selectedEditRequest.current_data.min_order_qty} units</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Proposed Data */}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-green-800 mb-3 flex items-center">
+                    <Edit2 size={18} className="mr-2" />
+                    Proposed Changes
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-sm text-gray-600">Name:</span>
+                      <p className="font-medium">{selectedEditRequest.proposed_data.item_name}</p>
+                    </div>
+                    <div className="flex items-center">
+                      <DollarSign size={14} className="mr-1 text-gray-500" />
+                      <span className="text-sm text-gray-600 mr-2">Price:</span>
+                      <p className="font-medium">₹{selectedEditRequest.proposed_data.price}</p>
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin size={14} className="mr-1 text-gray-500" />
+                      <span className="text-sm text-gray-600 mr-2">Location:</span>
+                      <p className="font-medium">{selectedEditRequest.proposed_data.location}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-600">Stock:</span>
+                      <p className="font-medium">{selectedEditRequest.proposed_data.available_stock} units</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-600">Min Order:</span>
+                      <p className="font-medium">{selectedEditRequest.proposed_data.min_order_qty} units</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Farmer Info */}
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Farmer Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <p className="font-medium">{selectedEditRequest.farmer_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <p className="font-medium">{selectedEditRequest.farmer_email}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Farmer ID:</span>
+                    <p className="font-medium">{selectedEditRequest.farmer_id}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Product ID:</span>
+                    <p className="font-medium">{selectedEditRequest.product_id}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rejection Section */}
+              <div className="border-t pt-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Rejection Reason (if rejecting)</h4>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Enter reason for rejection..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                  rows="3"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setSelectedEditRequest(null);
+                    setRejectReason('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRejectEditRequest(selectedEditRequest.request_id)}
+                  disabled={!rejectReason.trim()}
+                  className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X size={18} className="inline mr-2" />
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleApproveEditRequest(selectedEditRequest.request_id)}
+                  disabled={isProcessing}
+                  className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <Check size={18} className="inline mr-2" />
+                      Approve Changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
