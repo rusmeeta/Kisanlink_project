@@ -835,78 +835,138 @@ def admin_change_status(product_id):
 
 @admin_bp.route('/stats', methods=['GET'])
 def admin_stats():
-    """Get dashboard statistics"""
+    """Get accurate dashboard statistics"""
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
-        # Get total farmers
-        query1 = text("SELECT COUNT(*) FROM users WHERE user_type = 'farmer'")
-        total_farmers = db.session.execute(query1).scalar() or 0
+        print("📊 Fetching accurate dashboard statistics...")
         
-        # Get total consumers
-        query_consumers = text("SELECT COUNT(*) FROM users WHERE user_type = 'consumer'")
-        total_consumers = db.session.execute(query_consumers).scalar() or 0
-        
-        # Get total products
-        query2 = text("SELECT COUNT(*) FROM farmer_items")
-        total_products = db.session.execute(query2).scalar() or 0
-        
-        # Get total users
-        query_total_users = text("SELECT COUNT(*) FROM users WHERE user_type IN ('farmer', 'consumer')")
-        total_users = db.session.execute(query_total_users).scalar() or 0
-        
-        # Get low stock products count
-        from models_farmer_items import FarmerItem
-        low_stock_products = FarmerItem.query.filter(FarmerItem.available_stock < 10).count()
-        
-        # Get pending products count
-        query_pending = text("SELECT COUNT(*) FROM farmer_items WHERE status = 'pending_approval' OR is_approved = FALSE")
-        pending_products = db.session.execute(query_pending).scalar() or 0
-        
-        # Get approved products count
-        query_approved = text("SELECT COUNT(*) FROM farmer_items WHERE status = 'approved' AND is_approved = TRUE")
-        approved_products = db.session.execute(query_approved).scalar() or 0
-        
-        # Get active farmers (with approved products)
-        query_active_farmers = text("""
-            SELECT COUNT(DISTINCT u.id) 
-            FROM users u
-            JOIN farmer_items fi ON u.id = fi.farmer_id
-            WHERE u.user_type = 'farmer' 
-              AND fi.status = 'approved' 
-              AND fi.is_approved = TRUE
+        # 1. Get ACTIVE farmers (not deactivated)
+        active_farmers_query = text("""
+            SELECT COUNT(*) FROM users 
+            WHERE user_type = 'farmer' AND is_active = TRUE
         """)
-        active_farmers = db.session.execute(query_active_farmers).scalar() or 0
+        total_farmers = db.session.execute(active_farmers_query).scalar() or 0
+        
+        # 2. Get ACTIVE consumers (not deactivated)
+        active_consumers_query = text("""
+            SELECT COUNT(*) FROM users 
+            WHERE user_type = 'consumer' AND is_active = TRUE
+        """)
+        total_consumers = db.session.execute(active_consumers_query).scalar() or 0
+        
+        # 3. Get total products
+        total_products_query = text("SELECT COUNT(*) FROM farmer_items")
+        total_products = db.session.execute(total_products_query).scalar() or 0
+        
+        # 4. Get APPROVED products (active, not rejected)
+        approved_products_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE status = 'approved' 
+            AND is_approved = TRUE
+            AND status != 'rejected'
+        """)
+        approved_products = db.session.execute(approved_products_query).scalar() or 0
+        
+        # 5. Get PENDING products (needs approval)
+        pending_products_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE status = 'pending_approval' 
+            OR (is_approved = FALSE AND status != 'rejected')
+        """)
+        pending_products = db.session.execute(pending_products_query).scalar() or 0
+        
+        # 6. Get REJECTED products
+        rejected_products_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE status = 'rejected'
+        """)
+        rejected_products = db.session.execute(rejected_products_query).scalar() or 0
+        
+        # 7. Get LOW STOCK products (approved only, not rejected)
+        low_stock_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE available_stock < 10 
+            AND available_stock > 0
+            AND status = 'approved'
+            AND is_approved = TRUE
+            AND status != 'rejected'
+        """)
+        low_stock_products = db.session.execute(low_stock_query).scalar() or 0
+        
+        # 8. Get OUT OF STOCK products (approved only)
+        out_of_stock_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE available_stock <= 0
+            AND status = 'approved'
+            AND is_approved = TRUE
+            AND status != 'rejected'
+        """)
+        out_of_stock_products = db.session.execute(out_of_stock_query).scalar() or 0
+        
+        # 9. Get CRITICAL stock (less than 5 units)
+        critical_stock_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE available_stock < 5 
+            AND available_stock > 0
+            AND status = 'approved'
+            AND is_approved = TRUE
+            AND status != 'rejected'
+        """)
+        critical_stock = db.session.execute(critical_stock_query).scalar() or 0
+        
+        # 10. Get farmers with products
+        farmers_with_products_query = text("""
+            SELECT COUNT(DISTINCT farmer_id) 
+            FROM farmer_items 
+            WHERE status = 'approved' 
+            AND is_approved = TRUE
+        """)
+        active_farmers = db.session.execute(farmers_with_products_query).scalar() or 0
+        
+        # 11. Get recent products (last 7 days)
+        recent_products_query = text("""
+            SELECT COUNT(*) FROM farmer_items 
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+        """)
+        recent_products = db.session.execute(recent_products_query).scalar() or 0
+        
+        print(f"✅ Stats calculated: {total_farmers} farmers, {total_consumers} consumers, {approved_products} approved products")
         
         return jsonify({
             'success': True,
             'totalFarmers': total_farmers,
             'totalConsumers': total_consumers,
-            'totalUsers': total_users,
-            'activeFarmers': active_farmers,
+            'totalUsers': total_farmers + total_consumers,
             'totalProducts': total_products,
-            'lowStockProducts': low_stock_products,
-            'pendingProducts': pending_products,
             'approvedProducts': approved_products,
-            'activeListings': approved_products
+            'pendingProducts': pending_products,
+            'rejectedProducts': rejected_products,
+            'lowStockProducts': low_stock_products,
+            'outOfStockProducts': out_of_stock_products,
+            'criticalStockProducts': critical_stock,
+            'activeFarmers': active_farmers,
+            'recentProducts': recent_products,
+            'productStatus': {
+                'approved': approved_products,
+                'pending': pending_products,
+                'rejected': rejected_products
+            },
+            'stockStatus': {
+                'critical': critical_stock,
+                'low': low_stock_products - critical_stock,
+                'out': out_of_stock_products
+            }
         })
         
     except Exception as e:
-        print(f"Stats error: {e}")
-        # Fallback with sample data
+        print(f"❌ Stats error: {e}")
         return jsonify({
-            'success': True,
-            'totalFarmers': 11,
-            'totalConsumers': 5,
-            'totalUsers': 16,
-            'totalProducts': 5,
-            'lowStockProducts': 2,
-            'pendingProducts': 3,
-            'approvedProducts': 2,
-            'activeListings': 2
-        })
-
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to load statistics'
+        }), 500
 # ========== GET ALL FARMERS ==========
 @admin_bp.route('/farmers', methods=['GET'])
 def get_all_farmers():
@@ -1462,65 +1522,67 @@ from models_farmer_items import FarmerItem
 
 @admin_bp.route('/low-stock-products', methods=['GET'])
 def get_low_stock_products():
-    """Get products with low stock (less than 10 units)"""
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
-        print("🔍 Fetching low stock products from database...")
+        # Use raw SQL with proper NULL handling
+        query = text("""
+            SELECT 
+                fi.id,
+                fi.item_name,
+                fi.price,
+                fi.location,
+                fi.min_order_qty,
+                fi.available_stock,
+                fi.photo_path,
+                fi.farmer_id,
+                u.fullname as farmer_name,
+                u.email as farmer_email
+            FROM farmer_items fi
+            JOIN users u ON fi.farmer_id = u.id
+            WHERE fi.available_stock < 10 
+              AND COALESCE(fi.status, 'pending') != 'rejected'
+              AND COALESCE(fi.is_approved, false) = true
+            ORDER BY fi.available_stock ASC
+        """)
         
-        # Get products with less than 10 units in stock
-        low_stock_products = FarmerItem.query.filter(
-            FarmerItem.available_stock < 10
-        ).order_by(FarmerItem.available_stock.asc()).all()
-        
-        print(f"✅ Found {len(low_stock_products)} low stock products")
+        result = db.session.execute(query)
+        products = result.fetchall()
         
         products_list = []
-        for product in low_stock_products:
-            # Get farmer info
-            from models_user import User
-            farmer = User.query.get(product.farmer_id)
-            
-            stock_level = product.available_stock
+        for p in products:
+            stock_level = p.available_stock
             status = 'critical' if stock_level < 5 else 'low'
             
             products_list.append({
-                'id': product.id,
-                'item_name': product.item_name,
-                'price': float(product.price),
-                'location': product.location,
-                'min_order_qty': product.min_order_qty,
+                'id': p.id,
+                'item_name': p.item_name,
+                'price': float(p.price),
+                'location': p.location,
+                'min_order_qty': p.min_order_qty,
                 'available_stock': stock_level,
-                'photo_path': product.photo_path,
-                'farmer_id': product.farmer_id,
-                'farmer_name': farmer.fullname if farmer else "Unknown Farmer",
-                'farmer_email': farmer.email if farmer else "",
+                'photo_path': p.photo_path,
+                'farmer_id': p.farmer_id,
+                'farmer_name': p.farmer_name,
+                'farmer_email': p.farmer_email,
                 'status': status,
-                'stock_level': stock_level,
-                'threshold': 10
+                'stock_level': stock_level
             })
         
         return jsonify({
             'success': True,
             'products': products_list,
-            'count': len(products_list),
-            'threshold': 10,
-            'message': f'Found {len(products_list)} products with low stock'
+            'count': len(products_list)
         })
         
     except Exception as e:
-        print(f"❌ Get low stock products error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
         return jsonify({
             'success': False,
             'error': str(e),
             'products': [],
-            'count': 0,
-            'message': 'Failed to fetch low stock products'
-        })
+            'count': 0
+        }), 500
 
 # ========== NOTIFY FARMER ABOUT LOW STOCK ==========
 
@@ -1898,6 +1960,219 @@ def reactivate_user_with_notification(user_id):
     except Exception as e:
         db.session.rollback()
         print(f"❌ Reactivate user error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    
+# ========== GET NOTIFICATION HISTORY FOR PRODUCT ==========
+
+@admin_bp.route('/products/<int:product_id>/notification-history', methods=['GET'])
+def get_product_notification_history(product_id):
+    """Get all notifications sent to farmer about this product's low stock"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        print(f"🔍 Fetching notification history for product ID: {product_id}")
+        
+        # First verify product exists and get farmer info
+        product_query = text("""
+            SELECT fi.id, fi.item_name, fi.farmer_id, u.fullname as farmer_name
+            FROM farmer_items fi
+            JOIN users u ON fi.farmer_id = u.id
+            WHERE fi.id = :product_id
+        """)
+        
+        product_result = db.session.execute(product_query, {'product_id': product_id})
+        product = product_result.fetchone()
+        
+        if not product:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        # SIMPLE QUERY - Get all notifications for this farmer
+        notification_query = text("""
+            SELECT 
+                id,
+                message,
+                created_at,
+                target_role
+            FROM notifications 
+            WHERE user_id = :farmer_id 
+            AND (message LIKE '%low stock%' OR message LIKE '%Low Stock%')
+            ORDER BY created_at DESC
+        """)
+        
+        notification_result = db.session.execute(notification_query, {
+            'farmer_id': product.farmer_id
+        })
+        
+        notifications = notification_result.fetchall()
+        
+        # Process notifications
+        all_notifications = []
+        
+        for notification in notifications:
+            notification_dict = {
+                'id': notification.id,
+                'message': notification.message,
+                'created_at': notification.created_at.isoformat() if notification.created_at else None,
+                'target_role': notification.target_role,
+                'read_at': None,
+                'is_read': False
+            }
+            all_notifications.append(notification_dict)
+        
+        # Also try to get notifications mentioning this specific product
+        try:
+            product_notification_query = text("""
+                SELECT 
+                    id,
+                    message,
+                    created_at,
+                    target_role
+                FROM notifications 
+                WHERE user_id = :farmer_id 
+                AND message LIKE :product_name_pattern
+                ORDER BY created_at DESC
+            """)
+            
+            product_pattern = f'%{product.item_name}%'
+            product_notification_result = db.session.execute(product_notification_query, {
+                'farmer_id': product.farmer_id,
+                'product_name_pattern': product_pattern
+            })
+            
+            product_notifications = product_notification_result.fetchall()
+            
+            for notification in product_notifications:
+                # Check if we already have this notification
+                if not any(n['id'] == notification.id for n in all_notifications):
+                    notification_dict = {
+                        'id': notification.id,
+                        'message': notification.message,
+                        'created_at': notification.created_at.isoformat() if notification.created_at else None,
+                        'target_role': notification.target_role,
+                        'read_at': None,
+                        'is_read': False
+                    }
+                    all_notifications.append(notification_dict)
+                    
+        except Exception as e:
+            print(f"⚠️ Error getting product-specific notifications: {e}")
+        
+        # Sort by date (newest first)
+        all_notifications.sort(key=lambda x: x['created_at'] or '', reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'product': {
+                'id': product.id,
+                'item_name': product.item_name,
+                'farmer_id': product.farmer_id,
+                'farmer_name': product.farmer_name
+            },
+            'notifications': all_notifications,
+            'count': len(all_notifications),
+            'message': f'Found {len(all_notifications)} notifications for this farmer'
+        })
+        
+    except Exception as e:
+        print(f"❌ Get notification history error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'notifications': [],
+            'count': 0
+        })
+    
+# ========== DELETE LOW STOCK PRODUCT WITH NOTIFICATION ==========
+
+@admin_bp.route('/products/<int:product_id>/delete-low-stock', methods=['DELETE'])
+def delete_low_stock_product(product_id):
+    """Delete a low stock product and notify farmer with reason"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        data = request.get_json()
+        reason = data.get('reason', 'Low stock product removed').strip()
+        
+        print(f"🗑️ Attempting to delete low stock product ID: {product_id}")
+        
+        # Get product info before deletion for notification
+        check_query = text("""
+            SELECT fi.id, fi.item_name, fi.available_stock, fi.farmer_id, 
+                   u.fullname as farmer_name, u.email as farmer_email
+            FROM farmer_items fi
+            JOIN users u ON fi.farmer_id = u.id
+            WHERE fi.id = :product_id 
+              AND fi.available_stock < 10
+        """)
+        result = db.session.execute(check_query, {'product_id': product_id})
+        product = result.fetchone()
+        
+        if not product:
+            return jsonify({
+                'success': False,
+                'error': 'Product not found or not low on stock'
+            }), 404
+        
+        # Create deletion notification for farmer
+        notification_message = f"🗑️ Product Deleted: Your product '{product.item_name}' has been removed from low stock list. Reason: {reason}"
+        
+        # Save notification
+        notification_saved = False
+        try:
+            from models_notification import Notification
+            notification = Notification(
+                user_id=product.farmer_id,
+                message=notification_message,
+                target_role="farmer",
+                created_at=datetime.datetime.now()
+            )
+            db.session.add(notification)
+            notification_saved = True
+        except Exception:
+            try:
+                notification_query = text("""
+                    INSERT INTO notifications (user_id, message, target_role, created_at)
+                    VALUES (:user_id, :message, :target_role, NOW())
+                """)
+                db.session.execute(notification_query, {
+                    'user_id': product.farmer_id,
+                    'message': notification_message,
+                    'target_role': 'farmer'
+                })
+                notification_saved = True
+            except Exception:
+                notification_saved = False
+        
+        # Delete the product
+        delete_query = text("DELETE FROM farmer_items WHERE id = :product_id")
+        db.session.execute(delete_query, {'product_id': product_id})
+        db.session.commit()
+        
+        print(f"✅ Low stock product '{product.item_name}' (ID: {product_id}) deleted successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': f"Product '{product.item_name}' deleted successfully",
+            'notification_sent': notification_saved,
+            'product': {
+                'id': product_id,
+                'name': product.item_name,
+                'farmer_name': product.farmer_name,
+                'deletion_reason': reason
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Delete low stock product error: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)

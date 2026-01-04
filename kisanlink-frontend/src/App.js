@@ -35,6 +35,7 @@ import ProductsManagement from "./pages/admin/ProductsManagement";
 import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
 import PendingProducts from './pages/admin/PendingProducts';
+import LowStockProducts from './pages/admin/LowStockProducts';
 
 import VerificationSuccess from "./pages/VerificationSuccess";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -130,7 +131,9 @@ function App() {
         // In your App.jsx or router file
         <Route path="/consumer/order-status" element={<OrderStatus />} />
         <Route path="/admin/products/pending" element={<PendingProducts />
+        
         } />
+        <Route path="/admin/low-stock-products" element={<LowStockProducts />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />
