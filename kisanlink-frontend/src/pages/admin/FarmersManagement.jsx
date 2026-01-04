@@ -160,7 +160,7 @@ const FarmersManagement = () => {
         {
           reason: deactivationReason,
           deactivation_type: deactivationType,
-          notification_message: notificationMessage // Include the message
+          notification_message: notificationMessage
         },
         {
           withCredentials: true,
@@ -564,7 +564,7 @@ const FarmersManagement = () => {
 
                   {/* Status Badge with Deactivation Info */}
                   <div className="flex items-center justify-between p-4 rounded-lg bg-gray-50">
-                    <div>
+                    <div className="flex items-center gap-2">
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedFarmer.is_active
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
@@ -572,7 +572,7 @@ const FarmersManagement = () => {
                         {selectedFarmer.is_active ? 'Active' : 'Inactive'}
                       </span>
                       {!selectedFarmer.is_active && selectedFarmer.deactivation_type && (
-                        <span className="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded">
+                        <span className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded">
                           {selectedFarmer.deactivation_type === 'permanent' ? 'Permanent' : 'Temporary'}
                         </span>
                       )}
@@ -605,35 +605,75 @@ const FarmersManagement = () => {
                       <p className="text-sm text-gray-500">User Type</p>
                       <p className="font-medium">Farmer</p>
                     </div>
+                    
+                    {/* Account Created - Added like in Consumer */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">Account Created</p>
+                      <p className="font-medium">{selectedFarmer.created_at ? formatDate(selectedFarmer.created_at) : 'Never'}</p>
+                    </div>
                   </div>
 
-                  {/* Deactivation Details Section (Only show if deactivated) */}
-                  {!selectedFarmer.is_active && selectedFarmer.deactivation_reason && (
+                  {/* DEACTIVATION INFORMATION - SHOW FOR INACTIVE FARMERS */}
+                  {!selectedFarmer.is_active && (
                     <div className="space-y-4">
-                      {/* Deactivation Reason */}
+                      {/* Deactivation Reason Section */}
                       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                         <div className="flex items-start">
                           <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h5 className="font-medium text-red-800 mb-1">Account Deactivation Details</h5>
+                          <div className="flex-1">
+                            <h5 className="font-bold text-red-800 mb-2">Account Deactivation Information</h5>
+                            
+                            {/* Show the reason admin typed when deactivating */}
                             <div className="mb-3">
                               <p className="text-sm font-semibold text-gray-700 mb-1">Deactivation Reason:</p>
-                      <div className="bg-white p-3 rounded border border-red-100">
-                        <p className="text-red-700 font-medium">
-                          {selectedFarmer.deactivation_reason || 
-                           selectedFarmer.reason || 
-                           'No specific reason provided'}
-                        </p>
-                      </div>
-                    </div>
-                            <p className="text-sm text-red-700 mb-2">
-                              <span className="font-medium">Reason:</span> {selectedFarmer.deactivation_reason}
-                            </p>
-                            {selectedFarmer.deactivated_by_name && (
-                              <p className="text-xs text-red-600">
-                                Deactivated by: {selectedFarmer.deactivated_by_name} • {formatDate(selectedFarmer.deactivated_at)}
+                              <div className="bg-white p-3 rounded border border-red-100">
+                                <p className="text-red-700 font-medium">
+                                  {selectedFarmer.deactivation_reason || 
+                                   selectedFarmer.reason || 
+                                   'No specific reason provided'}
+                                </p>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                This is the reason you provided when deactivating this account
                               </p>
-                            )}
+                            </div>
+                            
+                            {/* Deactivation Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <p className="text-gray-600">Deactivation Type:</p>
+                                <p className="font-medium">
+                                  {selectedFarmer.deactivation_type === 'permanent' ? 'Permanent Deactivation' : 
+                                   selectedFarmer.deactivation_type === 'temporary' ? 'Temporary Deactivation' : 
+                                   'Not specified'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Deactivated By:</p>
+                                <p className="font-medium">
+                                  {selectedFarmer.deactivated_by_name || 'System Admin'}
+                                </p>
+                              </div>
+                              {selectedFarmer.deactivated_at && (
+                                <>
+                                  <div>
+                                    <p className="text-gray-600">Deactivation Date:</p>
+                                    <p className="font-medium">{formatDate(selectedFarmer.deactivated_at)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-600">Status Duration:</p>
+                                    <p className="font-medium">
+                                      {(() => {
+                                        const deactivated = selectedFarmer.deactivated_at ? new Date(selectedFarmer.deactivated_at) : new Date();
+                                        const now = new Date();
+                                        const diffDays = Math.floor((now - deactivated) / (1000 * 60 * 60 * 24));
+                                        return `${diffDays} days`;
+                                      })()}
+                                    </p>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -643,32 +683,47 @@ const FarmersManagement = () => {
                         <div className="flex items-start mb-3">
                           <MessageSquare className="h-5 w-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
                           <div>
-                            <h5 className="font-medium text-blue-800">Notification Sent to Farmer</h5>
+                            <h5 className="font-bold text-blue-800">Notification Sent to Farmer</h5>
                             <p className="text-xs text-blue-600 mb-2">
-                              This message was sent to the farmer when account was deactivated
+                              This is the exact message that was sent to the farmer
                             </p>
                           </div>
                         </div>
-
+                        
                         <div className="bg-white p-4 rounded border border-blue-100">
-                          <div className="flex items-center mb-2">
-                            <MailWarning className="h-4 w-4 text-orange-500 mr-2" />
-                            <span className="text-sm font-medium text-gray-700">Message Content:</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                              <MailWarning className="h-4 w-4 text-orange-500 mr-2" />
+                              <span className="text-sm font-semibold text-gray-700">Message Content:</span>
+                            </div>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              Sent via Email & Notification
+                            </span>
                           </div>
-                          <div className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded">
-                            {selectedFarmer.notification_message ||
-                              `Dear ${selectedFarmer.fullname || 'Farmer'},
+                          
+                          <div className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded border border-gray-200">
+                            {selectedFarmer.notification_message || 
+                             selectedFarmer.deactivation_message ||
+                             `Dear ${selectedFarmer.fullname || 'Farmer'},
 
 Your account has been ${selectedFarmer.deactivation_type === 'permanent' ? 'permanently' : 'temporarily'} deactivated.
 
-Reason: ${selectedFarmer.deactivation_reason}
+${selectedFarmer.deactivation_reason ? `Reason: ${selectedFarmer.deactivation_reason}` : 'Please contact support for more information.'}
 
 Please contact support if you have any questions.
 
 - FarmLink Administration`}
                           </div>
+                          
                           <div className="mt-2 text-xs text-gray-500">
-                            Sent on: {formatDate(selectedFarmer.deactivated_at)}
+                            <div className="flex justify-between">
+                              <span>
+                                {selectedFarmer.deactivated_at ? 
+                                  `Sent on: ${formatDate(selectedFarmer.deactivated_at)}` : 
+                                  'Message delivery date not recorded'
+                                }
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -681,11 +736,11 @@ Please contact support if you have any questions.
                       <div className="flex items-center">
                         <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
                         <div>
-                          <h5 className="font-medium text-green-800 mb-1">Account Reactivated</h5>
+                          <h5 className="font-bold text-green-800 mb-1">Account Reactivated</h5>
                           <p className="text-sm text-green-700">
                             Reactivated on: {formatDate(selectedFarmer.reactivated_at)}
                             {selectedFarmer.reactivation_reason && (
-                              <span className="block mt-1">Reason: {selectedFarmer.reactivation_reason}</span>
+                              <span className="block mt-1 font-medium">Reactivation Reason: {selectedFarmer.reactivation_reason}</span>
                             )}
                           </p>
                         </div>
@@ -695,11 +750,11 @@ Please contact support if you have any questions.
 
                   {/* Account History Summary */}
                   <div className="bg-gray-50 p-4 rounded-lg">
-                    <h5 className="font-medium text-gray-900 mb-3">Account History</h5>
+                    <h5 className="font-bold text-gray-900 mb-3">Account History</h5>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Account Created:</span>
-                        <span className="font-medium">{formatDate(selectedFarmer.created_at)}</span>
+                        <span className="font-medium">{selectedFarmer.created_at ? formatDate(selectedFarmer.created_at) : 'Never'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Last Login:</span>

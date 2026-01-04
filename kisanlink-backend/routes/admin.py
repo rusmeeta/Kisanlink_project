@@ -938,7 +938,15 @@ def get_all_farmers():
                 user_type,
                 is_active,
                 COALESCE(login_count, 0) as login_count,
-                last_login
+                last_login,
+                deactivation_reason,
+                deactivated_at,
+                deactivation_type,
+                deactivated_by,
+                reactivated_at,
+                reactivation_reason,
+                is_email_verified,
+                email_verified_at
             FROM users 
             {where_clause}
             ORDER BY id DESC
@@ -959,10 +967,41 @@ def get_all_farmers():
         except Exception as e:
             print(f"⚠️ Could not fetch product counts: {e}")
         
+        # Get admin names for deactivated_by
+        admin_names = {}
+        try:
+            admin_query = text("SELECT id, fullname FROM users WHERE user_type = 'admin'")
+            admin_result = db.session.execute(admin_query)
+            for admin in admin_result:
+                admin_names[admin.id] = admin.fullname
+        except Exception:
+            admin_names = {}
+        
         # Convert to list of dictionaries
         farmers_list = []
         for farmer in farmers_data:
             farmer_id = farmer.id
+            deactivated_by_name = None
+            if farmer.deactivated_by and farmer.deactivated_by in admin_names:
+                deactivated_by_name = admin_names[farmer.deactivated_by]
+            
+            # Get notification message from notifications table
+            notification_message = None
+            try:
+                notification_query = text("""
+                    SELECT message FROM notifications 
+                    WHERE user_id = :user_id 
+                    AND message LIKE '%deactivated%' 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                """)
+                notification_result = db.session.execute(notification_query, {'user_id': farmer_id})
+                notification = notification_result.fetchone()
+                if notification:
+                    notification_message = notification.message
+            except Exception:
+                notification_message = None
+            
             farmers_list.append({
                 'id': farmer_id,
                 'fullname': farmer.fullname,
@@ -973,7 +1012,17 @@ def get_all_farmers():
                 'status': 'active' if farmer.is_active else 'inactive',
                 'login_count': farmer.login_count,
                 'last_login': farmer.last_login.isoformat() if farmer.last_login else None,
-                'product_count': product_counts.get(farmer_id, 0)
+                'product_count': product_counts.get(farmer_id, 0),
+                'deactivation_reason': farmer.deactivation_reason,
+                'deactivation_type': farmer.deactivation_type,
+                'deactivated_at': farmer.deactivated_at.isoformat() if farmer.deactivated_at else None,
+                'deactivated_by_name': deactivated_by_name,
+                'deactivated_by': farmer.deactivated_by,
+                'reactivated_at': farmer.reactivated_at.isoformat() if farmer.reactivated_at else None,
+                'reactivation_reason': farmer.reactivation_reason,
+                'notification_message': notification_message,
+                'is_email_verified': farmer.is_email_verified,
+                'email_verified_at': farmer.email_verified_at.isoformat() if farmer.email_verified_at else None
             })
         
         return jsonify({
@@ -1007,45 +1056,110 @@ def get_all_consumers():
     try:
         print("🔍 Fetching consumers from PostgreSQL database...")
         
-        # Query to get all consumers
-        query = text("""
+        # Get status filter from query parameter
+        status = request.args.get('status', 'active')  # Default: active
+        
+        # Build query based on status filter
+        if status == 'active':
+            where_clause = "WHERE user_type = 'consumer' AND is_active = TRUE"
+        elif status == 'inactive':
+            where_clause = "WHERE user_type = 'consumer' AND is_active = FALSE"
+        else:  # 'all'
+            where_clause = "WHERE user_type = 'consumer'"
+        
+        # Query to get consumers with ALL deactivation fields
+        query = text(f"""
             SELECT 
                 id,
                 fullname,
                 email,
                 location,
                 user_type,
+                is_active,
                 COALESCE(login_count, 0) as login_count,
-                last_login
+                last_login,
+              
+                deactivation_reason,
+                deactivated_at,
+                deactivation_type,
+                deactivated_by,
+                reactivated_at,
+                reactivation_reason,
+                is_email_verified,
+                email_verified_at
             FROM users 
-            WHERE user_type = 'consumer'
+            {where_clause}
             ORDER BY id DESC
         """)
         
         result = db.session.execute(query)
         consumers_data = result.fetchall()
         
-        print(f"✅ Database query successful, found {len(consumers_data)} consumers")
+        print(f"✅ Database query successful, found {len(consumers_data)} consumers (status: {status})")
+        
+        # Get admin names for deactivated_by
+        admin_names = {}
+        try:
+            admin_query = text("SELECT id, fullname FROM users WHERE user_type = 'admin'")
+            admin_result = db.session.execute(admin_query)
+            for admin in admin_result:
+                admin_names[admin.id] = admin.fullname
+        except Exception:
+            admin_names = {}
         
         # Convert to list of dictionaries
         consumers_list = []
         for consumer in consumers_data:
+            deactivated_by_name = None
+            if consumer.deactivated_by and consumer.deactivated_by in admin_names:
+                deactivated_by_name = admin_names[consumer.deactivated_by]
+            
+            # Get notification message from notifications table
+            notification_message = None
+            try:
+                notification_query = text("""
+                    SELECT message FROM notifications 
+                    WHERE user_id = :user_id 
+                    AND message LIKE '%deactivated%' 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                """)
+                notification_result = db.session.execute(notification_query, {'user_id': consumer.id})
+                notification = notification_result.fetchone()
+                if notification:
+                    notification_message = notification.message
+            except Exception:
+                notification_message = None
+            
             consumers_list.append({
                 'id': consumer.id,
                 'fullname': consumer.fullname,
                 'email': consumer.email,
                 'location': consumer.location,
                 'user_type': consumer.user_type,
+                'is_active': consumer.is_active,
+                'status': 'active' if consumer.is_active else 'inactive',
                 'login_count': consumer.login_count,
                 'last_login': consumer.last_login.isoformat() if consumer.last_login else None,
-                'product_count': 0  # Consumers don't have products
+                
+                'deactivation_reason': consumer.deactivation_reason,
+                'deactivation_type': consumer.deactivation_type,
+                'deactivated_at': consumer.deactivated_at.isoformat() if consumer.deactivated_at else None,
+                'deactivated_by_name': deactivated_by_name,
+                'deactivated_by': consumer.deactivated_by,
+                'reactivated_at': consumer.reactivated_at.isoformat() if consumer.reactivated_at else None,
+                'reactivation_reason': consumer.reactivation_reason,
+                'notification_message': notification_message,
+                'is_email_verified': consumer.is_email_verified,
+                'email_verified_at': consumer.email_verified_at.isoformat() if consumer.email_verified_at else None
             })
         
         return jsonify({
             'success': True,
             'consumers': consumers_list,
             'count': len(consumers_list),
-            'message': f'Found {len(consumers_list)} consumers from database'
+            'status_filter': status,
+            'message': f'Found {len(consumers_list)} consumers (status: {status})'
         })
         
     except Exception as e:
@@ -1060,7 +1174,6 @@ def get_all_consumers():
             'count': 0,
             'message': 'Database query failed'
         })
-
 # ========== GET ALL PRODUCTS ==========
 
 @admin_bp.route('/products', methods=['GET'])
@@ -1575,7 +1688,7 @@ def deactivate_user_with_reason(user_id):
         data = request.get_json()
         reason = data.get('reason', '').strip()
         deactivation_type = data.get('deactivation_type', 'temporary')
-        notification_message = data.get('notification_message', '')  # Get the notification message from frontend
+        
         
         if not reason:
             return jsonify({
@@ -1599,7 +1712,6 @@ def deactivate_user_with_reason(user_id):
                 'success': False,
                 'error': 'User not found'
             }), 404
-            
         
         # Check if user is already inactive
         if not user.is_active:
