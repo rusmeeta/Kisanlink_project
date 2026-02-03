@@ -3,7 +3,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
-  Package, ShoppingCart, Clock, Truck, CheckCircle
+  Package, ShoppingCart, Clock, Truck, CheckCircle,
+  Flag, Eye
 } from "lucide-react";
 
 const FarmerDashboard = () => {
@@ -11,16 +12,30 @@ const FarmerDashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
-  const [recentOrders, setRecentOrders] = useState([]); // NEW: For orders
+  const [recentOrders, setRecentOrders] = useState([]);
   const [stats, setStats] = useState({
     totalProducts: 0,
     totalOrders: 0,
     pendingNotifications: 0,
-    pendingOrders: 0 // NEW
+    pendingOrders: 0
   });
   const [unreadCounts, setUnreadCounts] = useState({
     notifications: 0,
     messages: 0
+  });
+  
+  // Complaint State
+  const [showComplaintBox, setShowComplaintBox] = useState(false);
+  const [complaintText, setComplaintText] = useState("");
+  const [loadingComplaint, setLoadingComplaint] = useState(false);
+  const [userComplaints, setUserComplaints] = useState([]);
+  const [showComplaintsList, setShowComplaintsList] = useState(false);
+  const [complaintsLoading, setComplaintsLoading] = useState(false);
+  const [complaintStats, setComplaintStats] = useState({
+    total: 0,
+    pending: 0,
+    resolved: 0,
+    dismissed: 0
   });
 
   const navigate = useNavigate();
@@ -55,50 +70,115 @@ const FarmerDashboard = () => {
     }
   };
 
-  // NEW: Fetch recent orders
-  // In fetchRecentOrders function
-const fetchRecentOrders = async () => {
-  try {
-    const farmerId = localStorage.getItem("userId");
-    if (!farmerId) {
-      console.error("No farmer ID found");
+  // Fetch recent orders
+  const fetchRecentOrders = async () => {
+    try {
+      const farmerId = localStorage.getItem("userId");
+      if (!farmerId) {
+        console.error("No farmer ID found");
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        console.error(`Failed to fetch orders: ${response.status}`);
+        return;
+      }
+      
+      const data = await response.json();
+      if (data.orders) {
+        const sortedOrders = data.orders.sort((a, b) => 
+          new Date(b.order_date) - new Date(a.order_date)
+        );
+        
+        setRecentOrders(sortedOrders);
+        
+        const pending = sortedOrders.filter(o => 
+          o.status === 'placed' || o.status === 'preparing'
+        ).length;
+        
+        setStats(prev => ({
+          ...prev,
+          pendingOrders: pending
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setRecentOrders([]);
+    }
+  };
+
+  // Fetch farmer complaints
+  const fetchUserComplaints = async () => {
+    if (!user) return;
+    setComplaintsLoading(true);
+    try {
+      const response = await fetch("http://localhost:5001/complaints/my-complaints", {
+        credentials: "include",
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setUserComplaints(data.complaints);
+        
+        // Calculate stats
+        const stats = {
+          total: data.complaints.length,
+          pending: data.complaints.filter(c => c.status === 'pending').length,
+          resolved: data.complaints.filter(c => c.status === 'resolved').length,
+          dismissed: data.complaints.filter(c => c.status === 'dismissed').length
+        };
+        setComplaintStats(stats);
+      } else {
+        console.error("Failed to fetch complaints:", data.error);
+        setUserComplaints([]);
+      }
+    } catch (error) {
+      console.error("Error fetching complaints:", error);
+      setUserComplaints([]);
+    } finally {
+      setComplaintsLoading(false);
+    }
+  };
+
+  // Submit complaint to admin
+  const submitComplaint = async () => {
+    if (!complaintText.trim()) {
+      alert("Please describe your issue");
       return;
     }
 
-    const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
-      credentials: "include",
-    });
-    
-    if (!response.ok) {
-      console.error(`Failed to fetch orders: ${response.status}`);
-      return;
+    setLoadingComplaint(true);
+    try {
+      const response = await fetch("http://localhost:5001/complaints/submit", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ complaint_text: complaintText }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        alert("✅ Complaint sent to admin!");
+        setComplaintText("");
+        setShowComplaintBox(false);
+        fetchUserComplaints();
+      } else {
+        alert(data.error || "Failed to submit complaint");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error submitting complaint");
+    } finally {
+      setLoadingComplaint(false);
     }
-    
-    const data = await response.json();
-    if (data.orders) {
-      // Sort by newest first
-      const sortedOrders = data.orders.sort((a, b) => 
-        new Date(b.order_date) - new Date(a.order_date)
-      );
-      
-      setRecentOrders(sortedOrders);
-      
-      // Count pending orders
-      const pending = sortedOrders.filter(o => 
-        o.status === 'placed' || o.status === 'preparing'
-      ).length;
-      
-      setStats(prev => ({
-        ...prev,
-        pendingOrders: pending
-      }));
-    }
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    // Set empty array on error
-    setRecentOrders([]);
-  }
-};
+  };
+
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -118,7 +198,6 @@ const fetchRecentOrders = async () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Refresh orders after update
           fetchRecentOrders();
           alert(`✅ Order status updated to ${newStatus}`);
         }
@@ -181,7 +260,6 @@ const fetchRecentOrders = async () => {
     if (!user) return;
 
     try {
-      // Fetch products count
       const productsRes = await fetch("http://localhost:5001/farmer/products", {
         credentials: "include",
       });
@@ -196,7 +274,6 @@ const fetchRecentOrders = async () => {
         }));
       }
 
-      // Fetch total orders count
       try {
         const ordersRes = await fetch(`http://localhost:5001/api/farmer/report/${user.id}`, {
           credentials: "include",
@@ -288,6 +365,15 @@ const fetchRecentOrders = async () => {
     return date.toLocaleDateString();
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'resolved': return 'bg-green-100 text-green-800';
+      case 'dismissed': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   // Initial fetch
   useEffect(() => {
     fetchFarmerData();
@@ -295,7 +381,7 @@ const fetchRecentOrders = async () => {
     fetchMessages();
     fetchStats();
     fetchRecentActivities();
-    fetchRecentOrders(); // NEW: Fetch orders
+    fetchRecentOrders();
   }, []);
 
   // Update when user data is loaded
@@ -303,6 +389,7 @@ const fetchRecentOrders = async () => {
     if (user) {
       fetchStats();
       fetchRecentOrders();
+      fetchUserComplaints();
     }
   }, [user]);
 
@@ -314,7 +401,7 @@ const fetchRecentOrders = async () => {
         fetchMessages();
         fetchStats();
         fetchRecentActivities();
-        fetchRecentOrders(); // NEW: Poll orders too
+        fetchRecentOrders();
       }
     }, POLL_INTERVAL);
 
@@ -333,18 +420,199 @@ const fetchRecentOrders = async () => {
     }
   };
 
-  // Sidebar navigation items - WITH ORDERS
+  // Sidebar navigation items
   const navItems = [
     { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
     { id: "addProduct", label: "Add Product", path: "/farmer/add-product" },
     { id: "productList", label: "Product List", path: "/farmer/products" },
-    { id: "orders", label: "Orders", path: "/farmer/orders" }, // NEW
+    { id: "orders", label: "Orders", path: "/farmer/orders" },
     { id: "reports", label: "Reports", path: "/farmer/report" },
     { id: "notifications", label: `Notifications (${unreadCounts.notifications})`, path: "/farmer/notifications" },
   ];
 
+  // Complaint Modal Component
+  // Complaint Modal Component - FIXED VERSION
+const ComplaintModal = () => {
+  const textareaRef = React.useRef(null);
+  
+  // Focus only once when modal opens
+  React.useEffect(() => {
+    if (textareaRef.current && showComplaintBox) {
+      textareaRef.current.focus();
+      // Move cursor to end
+      const length = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(length, length);
+    }
+  }, [showComplaintBox]); // Only run when showComplaintBox changes
+
+  // Use useCallback to prevent function recreation on every render
+  const handleTextChange = React.useCallback((e) => {
+    setComplaintText(e.target.value);
+  }, []);
+
+  const handleSubmit = React.useCallback(() => {
+    submitComplaint();
+  }, []);
+
+  const handleClose = React.useCallback(() => {
+    setShowComplaintBox(false);
+  }, []);
+
+  if (!showComplaintBox) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full">
+        <h3 className="text-xl font-bold mb-4">Report Issue to Admin</h3>
+        
+        <textarea
+          ref={textareaRef}
+          value={complaintText}
+          onChange={handleTextChange}
+          placeholder="Describe your issue or complaint..."
+          className="w-full h-40 p-3 border rounded-lg mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+          maxLength={500}
+          autoFocus
+        />
+        
+        <div className="flex justify-between text-sm text-gray-500 mb-6">
+          <div>Admin will review your complaint</div>
+          <div>{complaintText.length}/500</div>
+        </div>
+        
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={handleClose}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            disabled={loadingComplaint}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loadingComplaint || !complaintText.trim()}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+          >
+            {loadingComplaint ? "Sending..." : "Send to Admin"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+  // Complaints List Modal
+  const ComplaintsListModal = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold">My Complaints</h3>
+          <button
+            onClick={() => setShowComplaintsList(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {complaintsLoading ? (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <p className="mt-2 text-gray-600">Loading complaints...</p>
+          </div>
+        ) : userComplaints.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-gray-400 text-4xl mb-4">📝</div>
+            <h4 className="text-lg font-medium text-gray-900 mb-2">No complaints yet</h4>
+            <p className="text-gray-600">You haven't submitted any complaints.</p>
+            <button
+              onClick={() => {
+                setShowComplaintsList(false);
+                setShowComplaintBox(true);
+              }}
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Submit Your First Complaint
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                <div className="text-xl font-bold text-yellow-700">{complaintStats.pending}</div>
+                <div className="text-sm text-yellow-600">Pending</div>
+              </div>
+              <div className="bg-green-50 p-3 rounded-lg text-center">
+                <div className="text-xl font-bold text-green-700">{complaintStats.resolved}</div>
+                <div className="text-sm text-green-600">Resolved</div>
+              </div>
+              <div className="bg-red-50 p-3 rounded-lg text-center">
+                <div className="text-xl font-bold text-red-700">{complaintStats.dismissed}</div>
+                <div className="text-sm text-red-600">Dismissed</div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {userComplaints.map((complaint) => (
+                <div key={complaint.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(complaint.status)}`}>
+                          {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ID: #{complaint.id}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          • {complaint.created_at}
+                        </span>
+                      </div>
+                      <p className="text-gray-700">{complaint.complaint_text}</p>
+                      
+                      {complaint.admin_reply && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <MessageCircle className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm font-medium text-blue-700">Admin Response:</span>
+                          </div>
+                          <p className="text-sm text-gray-800">{complaint.admin_reply}</p>
+                          {complaint.updated_at && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Updated: {complaint.updated_at}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex bg-gray-50">
+      {/* Complaint Modal */}
+      {showComplaintBox && <ComplaintModal />}
+      
+      {/* Complaints List Modal */}
+      {showComplaintsList && <ComplaintsListModal />}
+      
+      {/* Report Issue Button - BOTTOM RIGHT */}
+      <button
+        onClick={() => setShowComplaintBox(true)}
+        className="fixed bottom-6 right-6 bg-red-600 text-white p-3 rounded-full shadow-lg hover:bg-red-700 z-40 flex items-center gap-2"
+        title="Report an issue to admin"
+      >
+        <Flag size={20} />
+        <span className="hidden sm:inline">Report Issue</span>
+      </button>
+
       {/* Sidebar */}
       <aside className="w-64 bg-white shadow-lg flex flex-col">
         <div className="p-6 text-center border-b">
@@ -353,6 +621,9 @@ const fetchRecentOrders = async () => {
           </div>
           <h2 className="mt-3 font-bold text-lg text-gray-800">{user?.fullname || "Farmer"}</h2>
           <p className="text-sm text-gray-500 mt-1">{user?.location || ""}</p>
+          
+          {/* Complaints Summary */}
+          
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
@@ -369,6 +640,19 @@ const fetchRecentOrders = async () => {
               {item.label}
             </Link>
           ))}
+          
+          {/* My Complaints Link */}
+          <button
+            onClick={() => setShowComplaintsList(true)}
+            className="w-full text-left block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-green-100 transition flex items-center justify-between"
+          >
+            <span>My Complaints</span>
+            {complaintStats.total > 0 && (
+              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                {complaintStats.total}
+              </span>
+            )}
+          </button>
           
           {/* Messages */}
           <Link
@@ -394,6 +678,20 @@ const fetchRecentOrders = async () => {
           </h1>
 
           <div className="flex items-center space-x-4">
+            {/* View Complaints Button */}
+            <button
+              onClick={() => setShowComplaintsList(true)}
+              className="relative text-gray-700 hover:text-red-600"
+              title="View my complaints"
+            >
+              <Flag className="w-6 h-6" />
+              {complaintStats.pending > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
+                  {complaintStats.pending}
+                </span>
+              )}
+            </button>
+
             {/* Notifications */}
             <Link
               to="/farmer/notifications"

@@ -15,8 +15,7 @@ import Report from "./pages/farmer/Report";
 import FarmerMessages from "./pages/farmer/Messages";
 import FarmerNotifications from "./pages/farmer/Notifications";
 import FarmerChat from "./pages/farmer/FarmerChat";
-import FarmerOrdersPage from "./pages/farmer/Orders"; // ✅ ADD THIS IMPORT
-
+import FarmerOrdersPage from "./pages/farmer/Orders";
 
 // Consumer pages
 import ConsumerDashboard from "./pages/consumer/Dashboard";
@@ -24,7 +23,6 @@ import Cart from "./pages/consumer/Cart";
 import Messages from "./pages/consumer/Messages";
 import Notifications from "./pages/consumer/Notifications";
 import ConsumerChat from "./pages/consumer/ConsumerChat";
-import ChatWithFarmer from "./pages/consumer/ChatWithFarmer";
 import OrderStatus from "./pages/consumer/OrderStatus";
 
 // Admin pages
@@ -36,6 +34,7 @@ import ConsumersManagement from "./pages/admin/ConsumersManagement";
 import TestDashboard from "./pages/admin/TestDashboard";
 import PendingProducts from './pages/admin/PendingProducts';
 import LowStockProducts from './pages/admin/LowStockProducts';
+import AdminComplaints from "./pages/admin/Complaints"; // FIXED: Capital C
 import EditRequestsPage from './pages/admin/EditRequestsPage';
 
 import VerificationSuccess from "./pages/VerificationSuccess";
@@ -86,7 +85,7 @@ function App() {
             <FarmerChat />
           </ProtectedRoute>
         } />
-        <Route path="/farmer/orders" element={ // ✅ ADD THIS ROUTE
+        <Route path="/farmer/orders" element={
           <ProtectedRoute allowedUserType="farmer">
             <FarmerOrdersPage />
           </ProtectedRoute>
@@ -113,12 +112,16 @@ function App() {
             <Notifications />
           </ProtectedRoute>
         } />
-        <Route path="/consumer/messages/:farmerId" element={
+        <Route path="/consumer/chat/:farmerId" element={
           <ProtectedRoute allowedUserType="consumer">
             <ConsumerChat />
           </ProtectedRoute>
         } />
-        <Route path="/consumer/messages/:farmerId" element={<ChatWithFarmer />} />
+        <Route path="/consumer/order-status" element={
+          <ProtectedRoute allowedUserType="consumer">
+            <OrderStatus />
+          </ProtectedRoute>
+        } />
 
         {/* Admin pages */}
         <Route path="/admin/login" element={<AdminLogin />} />
@@ -126,16 +129,14 @@ function App() {
         <Route path="/admin/farmers" element={<FarmersManagement />} />
         <Route path="/admin/products" element={<ProductsManagement />} />
         <Route path="/admin/consumers" element={<ConsumersManagement />} />
-        <Route path="/admin/dashboard" element={<TestDashboard />} />
-
-        <Route path="/verification-success" element={<VerificationSuccess />} />
-        // In your App.jsx or router file
-        <Route path="/consumer/order-status" element={<OrderStatus />} />
-        <Route path="/admin/products/pending" element={<PendingProducts />
-        
-        } />
+        <Route path="/admin/test-dashboard" element={<TestDashboard />} />
+        <Route path="/admin/complaints" element={<AdminComplaints />} />
+        <Route path="/admin/products/pending" element={<PendingProducts />} />
         <Route path="/admin/low-stock-products" element={<LowStockProducts />} />
         <Route path="/admin/edit-requests" element={<EditRequestsPage />} />
+
+        {/* Other pages */}
+        <Route path="/verification-success" element={<VerificationSuccess />} />
 
         {/* Catch-all */}
         <Route path="*" element={<Home />} />

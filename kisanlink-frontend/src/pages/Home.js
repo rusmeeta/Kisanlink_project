@@ -1,6 +1,32 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Shield } from "lucide-react";
+import { 
+  Shield, 
+  ArrowRight, 
+  Users, 
+  Package, 
+  Truck, 
+  CheckCircle,
+  Star,
+  TrendingUp,
+  Leaf,
+  Clock,
+  Award,
+  MapPin,
+  ChevronRight,
+  ChevronLeft,
+  Sparkles,
+  Heart,
+  ShoppingBag,
+  Calendar,
+  ShieldCheck,
+  Zap,
+  Sun,
+  Droplets,
+  Sprout,
+  Play,
+  Pause
+} from "lucide-react";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -11,8 +37,124 @@ const Home = () => {
   });
   const [adminError, setAdminError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    farmers: 0,
+    products: 0,
+    deliveries: 0,
+    satisfaction: 0
+  });
+  const [isVisible, setIsVisible] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
+  
+  // Photo Slider State
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const sliderInterval = useRef(null);
 
-  // Smooth scroll function
+  // Local Madhyapur Thimi Photos (Bhaktapur, Nepal)
+  // Using Nepali farming/agriculture images
+  const slides = [
+    {
+      id: 1,
+      image: "https://images.unsplash.com/photo-1560493676-04071c5f467b?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+      title: "Thimi Local Farmers",
+      description: "Farmers working in Madhyapur Thimi agricultural fields",
+      overlay: "from-emerald-900/70 via-emerald-800/50 to-emerald-700/30",
+      gradient: "from-emerald-600 to-emerald-700",
+      location: "Thimi Agricultural Area"
+    },
+    {
+      id: 2,
+      image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+      title: "Fresh Local Produce",
+      description: "Vegetables grown in Thimi's fertile soil",
+      overlay: "from-green-900/70 via-green-800/50 to-green-700/30",
+      gradient: "from-green-600 to-green-700",
+      location: "Thimi Farmlands"
+    },
+    {
+      id: 3,
+      image: "https://images.unsplash.com/photo-1579113800032-c38bd7635818?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+      title: "Traditional Farming",
+      description: "Sustainable farming practices in Madhyapur Thimi",
+      overlay: "from-amber-900/70 via-amber-800/50 to-amber-700/30",
+      gradient: "from-amber-600 to-amber-700",
+      location: "Thimi Village"
+    },
+    {
+      id: 4,
+      image: "https://images.unsplash.com/photo-1621753104474-1c19cf6e7e3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+      title: "Local Farmer Harvest",
+      description: "Harvesting fresh vegetables in traditional ways",
+      overlay: "from-teal-900/70 via-teal-800/50 to-teal-700/30",
+      gradient: "from-teal-600 to-teal-700",
+      location: "Thimi Fields"
+    },
+    {
+      id: 5,
+      image: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80",
+      title: "Fresh Crop Collection",
+      description: "Gathering freshly harvested crops from the field",
+      overlay: "from-blue-900/70 via-blue-800/50 to-blue-700/30",
+      gradient: "from-blue-600 to-blue-700",
+      location: "Thimi Farmlands"
+    }
+  ];
+
+  // Ref for scroll sections
+  const sectionsRef = useRef({});
+
+  // Track scroll position
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Animation on mount
+  useEffect(() => {
+    setIsVisible(true);
+    setTimeout(() => {
+      setStats({
+        farmers: 156,
+        products: 423,
+        deliveries: 892,
+        satisfaction: 96
+      });
+    }, 1000);
+  }, []);
+
+  // Auto slide functionality
+  useEffect(() => {
+    if (isAutoPlaying) {
+      sliderInterval.current = setInterval(() => {
+        setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+      }, 5000);
+    } else {
+      clearInterval(sliderInterval.current);
+    }
+
+    return () => clearInterval(sliderInterval.current);
+  }, [isAutoPlaying, slides.length]);
+
+  // Manual slide navigation
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
+  };
+
+  const goToSlide = (index) => {
+    setCurrentSlide(index);
+  };
+
+  const toggleAutoPlay = () => {
+    setIsAutoPlaying(!isAutoPlaying);
+  };
+
+  // Fixed scroll function
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -26,28 +168,20 @@ const Home = () => {
     setLoading(true);
 
     try {
-      // Call the backend login API
       const response = await fetch("http://localhost:5001/admin/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: adminCredentials.email,
-          password: adminCredentials.password,
-        }),
-        credentials: "include", // Important for sessions/cookies
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(adminCredentials),
+        credentials: "include",
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Store in localStorage for frontend check
         localStorage.setItem("adminLoggedIn", "true");
         localStorage.setItem("adminEmail", adminCredentials.email);
         localStorage.setItem("adminName", data.user_name || "Admin");
         
-        // Redirect to admin dashboard
         navigate("/admin/dashboard");
         setShowAdminModal(false);
         setAdminCredentials({ email: "", password: "" });
@@ -67,433 +201,468 @@ const Home = () => {
       ...adminCredentials,
       [e.target.name]: e.target.value
     });
-    setAdminError(""); // Clear error when user types
+    setAdminError("");
   };
 
-  // Setup default admin (first time only)
-  const setupDefaultAdmin = async () => {
-    try {
-      const response = await fetch("http://localhost:5001/admin/setup-default-admin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setAdminCredentials({
-          email: "admin@kisanlink.com",
-          password: "@admin123"
-        });
-        alert("Default admin created! Use these credentials to login.");
+  // Animated Counter Component
+  const AnimatedCounter = ({ end, duration = 2000, label, icon: Icon, color }) => {
+    const [count, setCount] = useState(0);
+    const [hasAnimated, setHasAnimated] = useState(false);
+
+    useEffect(() => {
+      if (isVisible && !hasAnimated) {
+        let startTime;
+        const animate = (timestamp) => {
+          if (!startTime) startTime = timestamp;
+          const progress = timestamp - startTime;
+          const percentage = Math.min(progress / duration, 1);
+          
+          setCount(Math.floor(percentage * end));
+          
+          if (percentage < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            setHasAnimated(true);
+          }
+        };
+        
+        requestAnimationFrame(animate);
       }
-    } catch (error) {
-      console.error("Setup error:", error);
-    }
+    }, [isVisible, end, duration, hasAnimated]);
+
+    return (
+      <div className={`bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${color === 'emerald' ? 'border-emerald-100' : color === 'blue' ? 'border-blue-100' : color === 'green' ? 'border-green-100' : 'border-amber-100'}`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className={`p-3 rounded-lg ${color === 'emerald' ? 'bg-emerald-50' : color === 'blue' ? 'bg-blue-50' : color === 'green' ? 'bg-green-50' : 'bg-amber-50'}`}>
+            <Icon className={`h-6 w-6 ${color === 'emerald' ? 'text-emerald-600' : color === 'blue' ? 'text-blue-600' : color === 'green' ? 'text-green-600' : 'text-amber-600'}`} />
+          </div>
+          <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
+            Live
+          </span>
+        </div>
+        <div className="text-3xl font-bold text-gray-900 mb-1">{count}+</div>
+        <div className="text-sm text-gray-600">{label}</div>
+        <div className="h-1 w-full bg-gray-200 rounded-full mt-3 overflow-hidden">
+          <div 
+            className={`h-full transition-all duration-1000 ${
+              color === 'emerald' ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' :
+              color === 'blue' ? 'bg-gradient-to-r from-blue-400 to-blue-500' :
+              color === 'green' ? 'bg-gradient-to-r from-green-400 to-green-500' :
+              'bg-gradient-to-r from-amber-400 to-amber-500'
+            }`}
+            style={{ width: `${(count / end) * 100}%` }}
+          />
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-amber-50 font-sans text-gray-900">
       {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
+      <nav 
+        className={`sticky top-0 z-50 transition-all duration-300 ${
+          scrollY > 50 
+            ? 'bg-white/95 backdrop-blur-md shadow-lg border-b border-emerald-100' 
+            : 'bg-transparent'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <div className="flex items-center">
-              <Link to="/" className="flex items-center space-x-2">
-                <span className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-amber-600 bg-clip-text text-transparent">
-                  Kisanlink
-                </span>
-              </Link>
-            </div>
+            <Link to="/" className="flex items-center space-x-2 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-amber-400 rounded-lg blur opacity-75 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative bg-white rounded-lg p-1.5">
+                  <Leaf className="h-6 w-6 text-emerald-600" />
+                </div>
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-amber-600 bg-clip-text text-transparent">
+                Kisanlink
+              </span>
+              <Sparkles className="h-4 w-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </Link>
 
-            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              
-              <button
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Home
-              </button>
-              <button 
-                onClick={() => scrollToSection('how-it-works')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                How It Works
-              </button>
-              
-              <button 
-                onClick={() => scrollToSection('join')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Join
-              </button>
+              {['home', 'how-it-works', 'features', 'join'].map((item) => (
+                <button
+                  key={item}
+                  onClick={() => scrollToSection(item)}
+                  className="relative text-gray-700 hover:text-emerald-600 font-medium transition-colors group capitalize"
+                >
+                  {item.replace('-', ' ')}
+                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-emerald-600 group-hover:w-full transition-all duration-300" />
+                </button>
+              ))}
               
               <div className="flex items-center space-x-4">
-                {/* Admin Login Button */}
                 <button
                   onClick={() => setShowAdminModal(true)}
-                  className="flex items-center px-4 py-2 text-purple-700 hover:text-purple-800 font-medium transition-colors"
+                  className="relative flex items-center px-4 py-2 text-purple-700 hover:text-purple-800 font-medium transition-all group"
                 >
-                  <Shield size={16} className="mr-2" />
+                  <Shield size={16} className="mr-2 group-hover:scale-110 transition-transform" />
                   Admin
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-purple-500 rounded-full animate-ping" />
                 </button>
 
-               
+                <div className="h-6 w-px bg-gray-300" />
+                
                 <Link
                   to="/login"
-                  className="px-4 py-2 text-emerald-700 hover:text-emerald-800 font-medium transition-colors"
+                  className="px-4 py-2 text-emerald-700 hover:text-emerald-800 font-medium transition-colors hover:bg-emerald-50 rounded-lg"
                 >
                   Login
                 </Link>
                 <Link
                   to="/signup"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors"
+                  className="relative px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-medium transition-all hover:shadow-lg hover:-translate-y-0.5 overflow-hidden group"
                 >
-                  Signup
+                  <span className="relative z-10">Signup</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </Link>
               </div>
             </div>
 
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <button className="text-gray-700 hover:text-emerald-600">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
+            <button className="md:hidden p-2 rounded-lg bg-emerald-50 text-emerald-600">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Admin Login Modal */}
-      {showAdminModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center">
-                  <Shield className="h-6 w-6 text-purple-600 mr-3" />
-                  <h3 className="text-xl font-bold text-gray-900">Admin Login</h3>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowAdminModal(false);
-                    setAdminError("");
-                    setAdminCredentials({ email: "", password: "" });
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
+      {/* ========== PHOTO SLIDER SECTION ========== */}
+      <section id="home" className="relative h-screen">
+        {/* Slides Container */}
+        <div className="absolute inset-0">
+          {slides.map((slide, index) => (
+            <div
+              key={slide.id}
+              className={`absolute inset-0 transition-opacity duration-1000 ${
+                index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              }`}
+            >
+              {/* Background Image with Overlay */}
+              <div 
+                className="absolute inset-0 bg-cover bg-center"
+                style={{ backgroundImage: `url('${slide.image}')` }}
+              >
+                <div className={`absolute inset-0 bg-gradient-to-r ${slide.overlay}`} />
               </div>
 
-              {/* Setup Button for First Time */}
-              
-
-              {/* Demo Credentials */}
-              
-
-              <form onSubmit={handleAdminLogin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Admin Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={adminCredentials.email}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="admin@kisanlink.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Admin Password
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={adminCredentials.password}
-                    onChange={handleInputChange}
-                    required
-                    placeholder=""
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
-                  />
-                </div>
-
-                {adminError && (
-                  <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
-                    {adminError}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                    loading
-                      ? "bg-purple-400 cursor-not-allowed"
-                      : "bg-purple-600 hover:bg-purple-700"
-                  } text-white`}
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Logging in...
+              {/* Slide Content */}
+              <div className="relative h-full flex items-center">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+                  <div className="max-w-2xl">
+                    {/* Location Badge */}
+                    <div className="inline-flex items-center mb-6 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium border border-white/30">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      🌾 Serving Madhyapur Thimi Municipality
                     </div>
-                  ) : (
-                    "Login as Admin"
-                  )}
-                </button>
-              </form>
+                    
+                    {/* Main Title */}
+                    <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 leading-tight">
+                      <span className="bg-gradient-to-r from-white via-emerald-100 to-amber-100 bg-clip-text text-transparent">
+                        Kisanlink
+                      </span>
+                      <br />
+                      <span className="text-2xl md:text-4xl lg:text-5xl">
+                        Fresh from <span className="text-emerald-300">Thimi Farms</span>
+                      </span>
+                    </h1>
+                    
+                    {/* Description */}
+                    <p className="text-lg md:text-xl text-gray-200 mb-8 max-w-xl">
+                      Connecting local farmers with conscious consumers. Experience the difference of 
+                      <span className="text-emerald-300 font-semibold"> farm-to-table</span> produce.
+                    </p>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Link
+                        to="/signup"
+                        className="group relative bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden"
+                      >
+                        <span className="relative z-10 flex items-center">
+                          Start Shopping
+                          <ArrowRight className="h-5 w-5 ml-2 transform group-hover:translate-x-1 transition-transform" />
+                        </span>
+                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      </Link>
 
-              <div className="mt-4 text-center text-sm text-gray-500">
-                <p>For security, admin access is restricted to authorized personnel only.</p>
+                      <Link
+                        to="/login"
+                        className="group relative bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white px-8 py-4 rounded-xl font-bold hover:bg-white/30 transition-all duration-300"
+                      >
+                        <span className="relative z-10 flex items-center">
+                          Login to Account
+                          <ArrowRight className="h-5 w-5 ml-2 transform group-hover:translate-x-1 transition-transform" />
+                        </span>
+                      </Link>
+                    </div>
+                    
+                    {/* Location Info */}
+                    <div className="mt-8 flex items-center text-white/80">
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse" />
+                        <span className="text-sm">{slide.location} • Bhaktapur, Nepal</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      )}
 
-      {/* Hero Section */}
-      <section className="relative py-20 px-4 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-amber-500/10"></div>
-        <div className="relative max-w-6xl mx-auto text-center">
-          <div className="inline-flex items-center mb-4 bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-medium">
-            🗺️ Serving Madhyapur Thimi Municipality
+        {/* Navigation Arrows */}
+        <button
+          onClick={prevSlide}
+          className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/10 backdrop-blur-sm text-white rounded-full hover:bg-white/20 transition-colors z-20"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        
+        <button
+          onClick={nextSlide}
+          className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/10 backdrop-blur-sm text-white rounded-full hover:bg-white/20 transition-colors z-20"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+
+        {/* Slider Controls */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 flex items-center space-x-4">
+          {/* Play/Pause Button */}
+          <button
+            onClick={toggleAutoPlay}
+            className="p-2 bg-white/10 backdrop-blur-sm text-white rounded-full hover:bg-white/20 transition-colors"
+            aria-label={isAutoPlaying ? "Pause slideshow" : "Play slideshow"}
+          >
+            {isAutoPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
+          
+          {/* Slide Indicators */}
+          <div className="flex space-x-2">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentSlide
+                    ? 'bg-emerald-400 w-8'
+                    : 'bg-white/50 hover:bg-white/80'
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
           </div>
           
-          <h1 className="text-4xl md:text-6xl font-bold mb-4 leading-tight">
-            <span className="bg-gradient-to-r from-emerald-600 to-amber-600 bg-clip-text text-transparent">
-              Kisanlink
-            </span>
-            <br />
-            <span className="text-gray-800 text-3xl md:text-4xl">
-              Local Harvest, Direct to You
-            </span>
-          </h1>
-
-          <p className="text-lg md:text-xl mb-8 max-w-2xl mx-auto text-gray-600">
-            Connecting farmers of Madhyapur Thimi with local consumers.
-            Fresh, authentic produce straight from our fields to your table.
-          </p>
-
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-4 flex-col sm:flex-row">
-            <Link
-              to="/signup"
-              className="group bg-emerald-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-emerald-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-            >
-              Signup
-            </Link>
-
-            <Link
-              to="/login"
-              className="group border-2 border-emerald-600 text-emerald-700 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-            >
-              Login
-            </Link>
+          {/* Slide Counter */}
+          <div className="text-white text-sm font-medium bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full">
+            {currentSlide + 1} / {slides.length}
           </div>
+        </div>
 
-          {/* Spacing */}
-          <div className="mt-16"></div>
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
+          <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
+            <div className="w-1 h-3 bg-white/70 rounded-full mt-2 animate-pulse" />
+          </div>
         </div>
       </section>
 
-      {/* About Section */}
-      {/* <section id="about" className="py-16 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              About <span className="text-emerald-600">Kisanlink</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h3 className="text-2xl font-bold mb-4 text-gray-800">
-                Our Mission
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Kisanlink is a community-driven platform dedicated to bridging the gap between 
-                local farmers and consumers in Madhyapur Thimi Municipality. We believe in 
-                empowering farmers with direct market access while providing consumers with 
-                fresh, authentic, and traceable agricultural products.
-              </p>
-              
-              <h3 className="text-2xl font-bold mb-4 text-gray-800">
-                What We Do
-              </h3>
-              <ul className="space-y-3 text-gray-600">
-                <li className="flex items-start">
-                  <span className="text-emerald-600 mr-3">✓</span>
-                  <span>Create direct connections between farmers and consumers</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-emerald-600 mr-3">✓</span>
-                  <span>Provide farmers with fair pricing and market access</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-emerald-600 mr-3">✓</span>
-                  <span>Offer consumers fresh, locally-sourced produce</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-emerald-600 mr-3">✓</span>
-                  <span>Support sustainable agricultural practices in our community</span>
-                </li>
-              </ul>
-            </div>
-            
-            <div className="bg-gradient-to-br from-emerald-50 to-amber-50 rounded-2xl p-8 shadow-lg">
-              <h3 className="text-2xl font-bold mb-6 text-center text-gray-800">
-                Why Choose Us?
-              </h3>
-              <div className="space-y-6">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-xl">🌱</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-1">Community Focused</h4>
-                    <p className="text-gray-600 text-sm">Dedicated exclusively to serving Madhyapur Thimi Municipality</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-xl">💚</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-1">Transparent & Fair</h4>
-                    <p className="text-gray-600 text-sm">Direct farmer-consumer connections eliminate middlemen</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-xl">🚀</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-1">Easy to Use</h4>
-                    <p className="text-gray-600 text-sm">Simple platform for both farmers and consumers</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section> */}
+      {/* ========== REST OF THE PAGE CONTENT ========== */}
+      
+      {/* Quick Stats Section */}
+      
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="py-16 px-4 bg-gradient-to-b from-amber-50 to-white">
+      <section id="how-it-works" className="py-20 px-4 bg-gradient-to-b from-white to-emerald-50">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">
-              How <span className="text-emerald-600">Kisanlink</span> Works
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center mb-4 bg-gradient-to-r from-green-100 to-green-50 text-green-800 px-4 py-2 rounded-full text-sm font-semibold">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Simple & Seamless
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+              How It <span className="text-emerald-600">Works</span>
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              A simple three-step process connecting our Thimi farmers with local consumers
+            <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+              Three simple steps from farm to your table
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="relative text-center p-8 rounded-2xl bg-gradient-to-b from-emerald-50 to-white shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">
-                1
+            {[
+              {
+                step: "1",
+                icon: Users,
+                title: "Farmers List Produce",
+                description: "Local farmers upload fresh harvest with photos and prices",
+                color: "emerald"
+              },
+              {
+                step: "2",
+                icon: ShoppingBag,
+                title: "Browse & Order",
+                description: "Select from fresh produce and place your order",
+                color: "amber"
+              },
+              {
+                step: "3",
+                icon: Truck,
+                title: "Fresh Delivery",
+                description: "Get farm-fresh produce delivered to your doorstep",
+                color: "green"
+              }
+            ].map((item) => (
+              <div 
+                key={item.step}
+                className="relative group"
+              >
+                <div className={`bg-gradient-to-b from-white to-emerald-50 rounded-2xl p-8 shadow-xl border border-emerald-100 hover:border-emerald-300 transition-all duration-300 group-hover:shadow-2xl group-hover:-translate-y-2`}>
+                  <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-r from-emerald-500 to-amber-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                    {item.step}
+                  </div>
+                  
+                  <div className={`w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-emerald-100 to-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                    <item.icon className="h-10 w-10 text-emerald-600" />
+                  </div>
+                  
+                  <h3 className="text-xl font-bold text-gray-900 mb-3 text-center group-hover:text-emerald-600 transition-colors">
+                    {item.title}
+                  </h3>
+                  
+                  <p className="text-gray-600 text-center">
+                    {item.description}
+                  </p>
+                </div>
               </div>
-              <div className="w-16 h-16 mx-auto mb-6 bg-emerald-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                <span className="text-3xl">👨‍🌾</span>
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900">Farmers List Produce</h3>
-              <p className="text-gray-600">
-                Local farmers in Thimi upload their fresh harvest with photos, prices, and availability
-              </p>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <div className="relative text-center p-8 rounded-2xl bg-gradient-to-b from-amber-50 to-white shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-amber-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">
-                2
-              </div>
-              <div className="w-16 h-16 mx-auto mb-6 bg-amber-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                <span className="text-3xl">🛒</span>
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900">Customers Browse & Order</h3>
-              <p className="text-gray-600">
-                Browse fresh produce from Thimi farms, place orders, and connect directly with farmers
-              </p>
+      {/* Features Section */}
+      <section id="features" className="py-20 px-4 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center mb-4 bg-gradient-to-r from-purple-100 to-purple-50 text-purple-800 px-4 py-2 rounded-full text-sm font-semibold">
+              <Zap className="h-4 w-4 mr-2" />
+              Why Choose Kisanlink
             </div>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+              Experience the <span className="text-emerald-600">Difference</span>
+            </h2>
+          </div>
 
-            <div className="relative text-center p-8 rounded-2xl bg-gradient-to-b from-emerald-50 to-white shadow-lg hover:shadow-xl transition-all duration-300 group">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">
-                3
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 inline-block mb-4 group-hover:scale-110 transition-transform duration-300">
+                <Sprout className="h-6 w-6 text-emerald-600" />
               </div>
-              <div className="w-16 h-16 mx-auto mb-6 bg-emerald-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                <span className="text-3xl">🚚</span>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors">100% Organic</h3>
+              <p className="text-gray-600 text-sm">Certified organic produce from Thimi farms</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl border border-amber-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100 inline-block mb-4 group-hover:scale-110 transition-transform duration-300">
+                <Clock className="h-6 w-6 text-amber-600" />
               </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900">Direct Delivery/Pickup</h3>
-              <p className="text-gray-600">
-                Fresh produce delivered to your doorstep or available for pickup in Thimi
-              </p>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-amber-600 transition-colors">Same Day Delivery</h3>
+              <p className="text-gray-600 text-sm">Fresh harvest delivered within hours</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl border border-green-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-green-50 to-green-100 inline-block mb-4 group-hover:scale-110 transition-transform duration-300">
+                <Award className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">Quality Guaranteed</h3>
+              <p className="text-gray-600 text-sm">Every product hand-picked and checked</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-purple-50 to-purple-100 inline-block mb-4 group-hover:scale-110 transition-transform duration-300">
+                <TrendingUp className="h-6 w-6 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">Fair Prices</h3>
+              <p className="text-gray-600 text-sm">Direct from farmers, better prices</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Join Section */}
-      <section id="join" className="py-16 px-4 bg-gradient-to-r from-emerald-600 to-amber-600 text-white">
+      {/* CTA Section */}
+      <section id="join" className="py-24 px-4 bg-gradient-to-r from-emerald-500 to-amber-500 text-white">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">
-            Join the Thimi Local Food Movement
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            Join the Food Revolution
           </h2>
-          <p className="text-lg mb-8 text-emerald-100 max-w-2xl mx-auto">
-            Whether you're a farmer looking to reach more customers or a consumer wanting fresh, 
-            local produce - Kisanlink connects our community.
+          <p className="text-xl mb-8 text-emerald-100 max-w-2xl mx-auto">
+            Be part of the movement that's changing how Thimi eats.
+            Fresh, local, and direct from our farms.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               to="/signup"
-              className="bg-white text-emerald-700 px-8 py-4 rounded-xl font-bold hover:bg-emerald-50 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1"
+              className="bg-white text-emerald-700 px-8 py-4 rounded-xl font-bold hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
             >
-              Signup Now
+              Start Your Journey
             </Link>
             
             <Link
               to="/login"
-              className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white/10 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1"
+              className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white/10 transition-all duration-300"
             >
-              Login to Account
+              Returning User?
             </Link>
           </div>
-          
-          <p className="mt-8 text-sm text-emerald-100">
-            Already have an account?{' '}
-            <Link to="/login" className="font-bold underline hover:text-white">
-              Login here
-            </Link>
-          </p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 bg-gray-900 text-white text-center">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-4">
-            <span className="text-lg font-semibold text-emerald-400">Madhyapur Thimi Municipality</span>
+      <footer className="py-12 px-4 bg-gray-900 text-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center mb-4">
+                <Leaf className="h-6 w-6 text-emerald-400 mr-2" />
+                <span className="text-xl font-bold">Kisanlink</span>
+              </div>
+              <p className="text-gray-400 text-sm">
+                Connecting Thimi's farmers with conscious consumers.
+              </p>
+            </div>
+            
+            <div>
+              <h4 className="font-bold mb-4">Quick Links</h4>
+              <ul className="space-y-2">
+                <li><button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-gray-400 hover:text-white transition-colors text-sm">Back to Top</button></li>
+                <li><button onClick={() => scrollToSection('how-it-works')} className="text-gray-400 hover:text-white transition-colors text-sm">How It Works</button></li>
+                <li><Link to="/login" className="text-gray-400 hover:text-white transition-colors text-sm">Login</Link></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-bold mb-4">Contact</h4>
+              <p className="text-gray-400 text-sm">
+                Madhyapur Thimi Municipality<br />
+                Bhaktapur, Nepal
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                📞 +977 9841XXXXXX
+              </p>
+            </div>
           </div>
-          <p className="text-gray-400 text-sm">
-            Connecting farmers and consumers within our community for fresher produce and stronger local economy
-          </p>
-          <p className="text-gray-500 text-xs mt-4">
-            © {new Date().getFullYear()} Kisanlink. All rights reserved.
-          </p>
+          
+          <div className="border-t border-gray-800 pt-8 text-center">
+            <p className="text-gray-500 text-sm">
+              © {new Date().getFullYear()} Kisanlink. Empowering local agriculture in Madhyapur Thimi.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

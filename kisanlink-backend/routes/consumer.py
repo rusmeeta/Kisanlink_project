@@ -5,187 +5,177 @@ from models_user import User
 from models_message import Message
 from models_farmer_items import FarmerItem
 from models_order import Order
-from sqlalchemy import or_
+from sqlalchemy import or_, and_, text
 
 consumer_bp = Blueprint("consumer", __name__)
 
 # -----------------------------
-# NEARBY PRODUCTS
+# NEARBY PRODUCTS - WITH DEBUG INFO
 # -----------------------------
 @consumer_bp.route('/nearby-products', methods=['GET'])
 def nearby_products():
-    # 1. Get consumer location from frontend
+    """Get nearby products - STRICTER VERSION"""
     try:
         consumer_lat = float(request.args.get("lat"))
         consumer_lon = float(request.args.get("lon"))
     except:
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # 2. Fetch all farmer_items + farmer location (only active farmers)
-    query = """
-        SELECT fi.*, u.fullname AS farmer_name, u.latitude AS farmer_lat, u.longitude AS farmer_lon
+    # STRICTER QUERY - Add these filters
+    query = text("""
+        SELECT fi.*, u.fullname AS farmer_name, u.latitude AS farmer_lat, u.longitude AS farmer_lon,
+               u.is_active as farmer_active, u.is_email_verified as farmer_verified,
+               u.deactivation_reason, u.deactivated_at  -- Add these for debugging
         FROM farmer_items fi
         JOIN users u ON fi.farmer_id = u.id
-        WHERE u.is_active = true  -- Only show products from active farmers
-    """
+        WHERE u.user_type = 'farmer'
+        AND u.is_active = TRUE  -- MUST BE ACTIVE
+        AND u.is_email_verified = TRUE
+        AND fi.status = 'approved'
+        AND fi.is_approved = TRUE
+        AND fi.available_stock > 0
+        AND (fi.has_pending_edit = FALSE OR fi.has_pending_edit IS NULL)  -- NO PENDING EDITS
+        AND (fi.edit_status IS NULL OR fi.edit_status != 'edit_pending')  -- NO EDIT PENDING STATUS
+    """)
+    
     result = db.session.execute(query)
-
-    # 3. Calculate distance for each product
+    
     items = []
+    blocked_items = []  # For debugging
+    
     for row in result:
+        # Check ALL conditions again in Python
+        farmer_active = row.farmer_active
+        farmer_verified = row.farmer_verified
+        product_status = row.status
+        is_approved = row.is_approved
+        has_pending_edit = row.has_pending_edit
+        
+        # If ANY condition fails, block this product
+        if not all([farmer_active, farmer_verified, 
+                   product_status == 'approved', is_approved,
+                   not has_pending_edit]):
+            blocked_items.append({
+                "product_id": row.id,
+                "product_name": row.item_name,
+                "farmer_id": row.farmer_id,
+                "farmer_name": row.farmer_name,
+                "reason": {
+                    "farmer_active": farmer_active,
+                    "farmer_verified": farmer_verified,
+                    "product_status": product_status,
+                    "is_approved": is_approved,
+                    "has_pending_edit": has_pending_edit
+                }
+            })
+            continue  # Skip this product
+        
+        # Only add if ALL conditions pass
         distance_km = haversine(consumer_lat, consumer_lon, row.farmer_lat, row.farmer_lon)
+        
         items.append({
             "id": row.id,
             "item_name": row.item_name,
-            "price": row.price,
+            "price": float(row.price) if row.price else 0,
             "photo_path": row.photo_path,
             "location": row.location,
             "min_order_qty": row.min_order_qty,
             "available_stock": row.available_stock,
             "farmer_name": row.farmer_name,
             "farmer_id": row.farmer_id,
-            "distance": round(distance_km, 2)  # km
+            "farmer_active": row.farmer_active,
+            "farmer_verified": row.farmer_verified,
+            "distance": round(distance_km, 2),
+            "status": row.status,
+            "is_approved": row.is_approved,
+            "has_pending_edit": row.has_pending_edit,
+            "edit_status": row.edit_status
         })
-
-    # 4. Sort by distance ascending
-    items.sort(key=lambda x: x["distance"])
-    return jsonify(items)
-
-# -----------------------------
-# GET FARMER DETAILS BY ID
-# -----------------------------
-@consumer_bp.route('/farmer-details/<int:farmer_id>', methods=['GET'])
-def get_farmer_details(farmer_id):
-    """
-    Get detailed information about a farmer
-    Used in consumer chat to show farmer name and details
-    """
-    try:
-        # Get farmer from users table - only if active
-        farmer = User.query.filter_by(
-            id=farmer_id, 
-            user_type='farmer',
-            is_active=True  # Only show details for active farmers
-        ).first()
-        
-        if not farmer:
-            return jsonify({
-                "status": "error",
-                "message": f"Farmer with ID {farmer_id} not found or not active"
-            }), 404
-        
-        # Get farmer's products count (only active farmers)
-        product_count = FarmerItem.query.filter_by(farmer_id=farmer_id).count()
-        
-        # Get rating (if you have rating system)
-        rating = 4.5  # Default or calculate from reviews
-        
-        return jsonify({
-            "status": "success",
-            "farmer": {
-                "id": farmer.id,
-                "fullname": farmer.fullname,
-                "email": farmer.email,
-                "location": farmer.location,
-                "latitude": farmer.latitude,
-                "longitude": farmer.longitude,
-                "user_type": farmer.user_type,
-                "is_active": farmer.is_active,
-                "product_count": product_count,
-                "rating": rating,
-                "joined_date": farmer.created_at.strftime("%Y-%m-%d") if hasattr(farmer, 'created_at') else "Unknown"
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"Error getting farmer details: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# -----------------------------
-# GET CONSUMER PROFILE
-# -----------------------------
-@consumer_bp.route('/profile', methods=['GET'])
-def get_consumer_profile():
-    """
-    Get current consumer profile info
-    """
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
     
-    user_id = session['user_id']
+    # Debug: List all deactivated farmers
+    deactivated_farmers_query = text("""
+        SELECT id, fullname, is_active, deactivation_reason, deactivated_at
+        FROM users 
+        WHERE user_type = 'farmer' AND is_active = FALSE
+    """)
+    deactivated_result = db.session.execute(deactivated_farmers_query)
+    deactivated_farmers = [
+        {
+            "id": row.id,
+            "name": row.fullname,
+            "reason": row.deactivation_reason,
+            "deactivated_at": row.deactivated_at.strftime("%Y-%m-%d") if row.deactivated_at else None
+        }
+        for row in deactivated_result
+    ]
     
-    try:
-        consumer = User.query.get(user_id)
-        
-        if not consumer or consumer.user_type != 'consumer':
-            return jsonify({"status": "error", "message": "Consumer not found"}), 404
-        
-        # Get consumer stats
-        total_orders = Order.query.filter_by(consumer_id=user_id).count()
-        
-        # Get total spent
-        total_spent_result = db.session.execute(
-            "SELECT COALESCE(SUM(total_price), 0) FROM orders WHERE consumer_id = :user_id",
-            {"user_id": user_id}
-        ).fetchone()
-        total_spent = float(total_spent_result[0]) if total_spent_result else 0
-        
-        return jsonify({
-            "status": "success",
-            "profile": {
-                "id": consumer.id,
-                "fullname": consumer.fullname,
-                "email": consumer.email,
-                "location": consumer.location,
-                "latitude": consumer.latitude,
-                "longitude": consumer.longitude,
-                "user_type": consumer.user_type,
-                "is_active": consumer.is_active,
-                "total_orders": total_orders,
-                "total_spent": total_spent,
-                "joined_date": consumer.created_at.strftime("%Y-%m-%d") if hasattr(consumer, 'created_at') else "Unknown"
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"Error getting consumer profile: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
+    return jsonify({
+        "products": items,
+        "count": len(items),
+        "debug": {
+            "blocked_products": blocked_items,
+            "deactivated_farmers_blocked": deactivated_farmers,
+            "message": f"Showing {len(items)} approved products from ACTIVE farmers only"
+        }
+    })
 # -----------------------------
-# GET ALL FARMERS (for consumer to browse)
+# GET ALL FARMERS - STRICT FILTER
 # -----------------------------
 @consumer_bp.route('/farmers', methods=['GET'])
 def get_all_farmers():
-    """
-    Get list of all farmers with basic info
-    """
+    """Get list of all active farmers with approved products - STRICT"""
     try:
-        # Only show active farmers
+        # Only show active and verified farmers
         farmers = User.query.filter_by(
             user_type='farmer',
-            is_active=True  # Only active farmers
+            is_active=True,
+            is_email_verified=True
         ).all()
         
         farmers_list = []
+        blocked_farmers = []
+        
         for farmer in farmers:
-            # Get product count for each farmer
-            product_count = FarmerItem.query.filter_by(farmer_id=farmer.id).count()
+            # Get approved products count
+            approved_products = FarmerItem.query.filter(
+                FarmerItem.farmer_id == farmer.id,
+                FarmerItem.status == 'approved',
+                FarmerItem.is_approved == True,
+                FarmerItem.available_stock > 0
+            ).all()
             
-            farmers_list.append({
-                "id": farmer.id,
-                "fullname": farmer.fullname,
-                "location": farmer.location,
-                "email": farmer.email,
-                "is_active": farmer.is_active,
-                "product_count": product_count,
-                "latitude": farmer.latitude,
-                "longitude": farmer.longitude
-            })
+            product_count = len(approved_products)
+            
+            if product_count > 0:
+                low_stock_count = len([p for p in approved_products if p.available_stock <= 5])
+                
+                farmers_list.append({
+                    "id": farmer.id,
+                    "fullname": farmer.fullname,
+                    "location": farmer.location,
+                    "email": farmer.email,
+                    "is_active": farmer.is_active,
+                    "is_verified": farmer.is_email_verified,
+                    "product_count": product_count,
+                    "low_stock_count": low_stock_count,
+                    "latitude": farmer.latitude,
+                    "longitude": farmer.longitude
+                })
+            else:
+                blocked_farmers.append({
+                    "id": farmer.id,
+                    "name": farmer.fullname,
+                    "reason": "No approved products with stock"
+                })
         
         return jsonify({
             "status": "success",
             "farmers": farmers_list,
-            "count": len(farmers_list)
+            "count": len(farmers_list),
+            "debug": {
+                "blocked_farmers": blocked_farmers,
+                "message": f"Showing {len(farmers_list)} active farmers with approved products"
+            }
         }), 200
         
     except Exception as e:
@@ -193,199 +183,146 @@ def get_all_farmers():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -----------------------------
-# GET FARMER PRODUCTS
+# DEBUG ENDPOINT - CHECK ALL DATA
 # -----------------------------
-@consumer_bp.route('/farmer/<int:farmer_id>/products', methods=['GET'])
-def get_farmer_products(farmer_id):
-    """
-    Get all products from a specific farmer
-    """
+@consumer_bp.route('/debug-data', methods=['GET'])
+def debug_data():
+    """Debug endpoint to check all farmers and products"""
     try:
-        # Check if farmer exists AND is active
-        farmer = User.query.filter_by(
-            id=farmer_id, 
-            user_type='farmer',
-            is_active=True  # Only show products from active farmers
-        ).first()
+        # Get all farmers
+        farmers = User.query.filter_by(user_type='farmer').all()
         
-        if not farmer:
-            return jsonify({"status": "error", "message": "Farmer not found or not active"}), 404
-        
-        # Get farmer's products
-        products = FarmerItem.query.filter_by(farmer_id=farmer_id).all()
-        
-        products_list = []
-        for product in products:
-            products_list.append({
-                "id": product.id,
-                "item_name": product.item_name,
-                "price": product.price,
-                "photo_path": product.photo_path,
-                "location": product.location,
-                "min_order_qty": product.min_order_qty,
-                "available_stock": product.available_stock,
-                "created_at": product.created_at.strftime("%Y-%m-%d %H:%M:%S") if hasattr(product, 'created_at') else None
-            })
-        
-        return jsonify({
-            "status": "success",
-            "farmer": {
-                "id": farmer.id,
-                "fullname": farmer.fullname,
-                "location": farmer.location,
-                "is_active": farmer.is_active
-            },
-            "products": products_list,
-            "count": len(products_list)
-        }), 200
-        
-    except Exception as e:
-        print(f"Error getting farmer products: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# -----------------------------
-# SEARCH FARMERS OR PRODUCTS
-# -----------------------------
-@consumer_bp.route('/search', methods=['GET'])
-def search():
-    """
-    Search for farmers or products
-    """
-    search_query = request.args.get('q', '').strip()
-    search_type = request.args.get('type', 'both')  # 'farmers', 'products', or 'both'
-    
-    if not search_query:
-        return jsonify({"status": "error", "message": "Search query required"}), 400
-    
-    try:
-        results = {"farmers": [], "products": []}
-        
-        # Search farmers - only active ones
-        if search_type in ['farmers', 'both']:
-            farmers = User.query.filter(
-                User.user_type == 'farmer',
-                User.is_active == True,  # Only active farmers
-                (User.fullname.ilike(f'%{search_query}%')) |
-                (User.location.ilike(f'%{search_query}%'))
-            ).limit(20).all()
-            
-            for farmer in farmers:
-                results["farmers"].append({
-                    "id": farmer.id,
-                    "fullname": farmer.fullname,
-                    "location": farmer.location,
-                    "email": farmer.email,
-                    "is_active": farmer.is_active
-                })
-        
-        # Search products - only from active farmers
-        if search_type in ['products', 'both']:
-            # First get all active farmer IDs
-            active_farmer_ids = [farmer.id for farmer in User.query.filter_by(
-                user_type='farmer', 
-                is_active=True
-            ).all()]
-            
-            if active_farmer_ids:
-                products = FarmerItem.query.filter(
-                    FarmerItem.farmer_id.in_(active_farmer_ids),
-                    or_(
-                        FarmerItem.item_name.ilike(f'%{search_query}%'),
-                        FarmerItem.location.ilike(f'%{search_query}%')
-                    )
-                ).limit(20).all()
-                
-                for product in products:
-                    # Get farmer info
-                    farmer = User.query.get(product.farmer_id)
-                    results["products"].append({
-                        "id": product.id,
-                        "item_name": product.item_name,
-                        "price": product.price,
-                        "photo_path": product.photo_path,
-                        "location": product.location,
-                        "farmer_id": product.farmer_id,
-                        "farmer_name": farmer.fullname if farmer else "Unknown",
-                        "farmer_active": farmer.is_active if farmer else False
-                    })
-        
-        return jsonify({
-            "status": "success",
-            "query": search_query,
-            "results": results,
-            "counts": {
-                "farmers": len(results["farmers"]),
-                "products": len(results["products"])
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"Error searching: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# -----------------------------
-# GET ONLY ACTIVE FARMERS ENDPOINT (Optional)
-# -----------------------------
-@consumer_bp.route('/active-farmers', methods=['GET'])
-def get_active_farmers():
-    """
-    Get only active farmers (explicit endpoint)
-    """
-    try:
-        # Get all active farmers
-        farmers = User.query.filter_by(
-            user_type='farmer',
-            is_active=True
-        ).all()
-        
-        farmers_list = []
+        farmer_data = []
         for farmer in farmers:
-            # Get product count for each farmer
-            product_count = FarmerItem.query.filter_by(farmer_id=farmer.id).count()
+            products = FarmerItem.query.filter_by(farmer_id=farmer.id).all()
             
-            farmers_list.append({
+            approved_products = [p for p in products if p.status == 'approved' and p.is_approved]
+            
+            farmer_data.append({
                 "id": farmer.id,
-                "fullname": farmer.fullname,
-                "location": farmer.location,
+                "name": farmer.fullname,
                 "email": farmer.email,
-                "product_count": product_count,
-                "latitude": farmer.latitude,
-                "longitude": farmer.longitude,
-                "is_active": farmer.is_active
+                "is_active": farmer.is_active,
+                "is_email_verified": farmer.is_email_verified,
+                "deactivation_reason": farmer.deactivation_reason,
+                "deactivated_at": farmer.deactivated_at.strftime("%Y-%m-%d %H:%M") if farmer.deactivated_at else None,
+                "total_products": len(products),
+                "approved_products": len(approved_products),
+                "products": [
+                    {
+                        "id": p.id,
+                        "name": p.item_name,
+                        "status": p.status,
+                        "is_approved": p.is_approved,
+                        "stock": p.available_stock,
+                        "has_pending_edit": p.has_pending_edit
+                    } for p in products
+                ]
             })
         
         return jsonify({
             "status": "success",
-            "message": f"Found {len(farmers_list)} active farmers",
-            "farmers": farmers_list,
-            "count": len(farmers_list)
-        }), 200
+            "total_farmers": len(farmer_data),
+            "active_farmers": len([f for f in farmer_data if f["is_active"]]),
+            "inactive_farmers": len([f for f in farmer_data if not f["is_active"]]),
+            "farmers": farmer_data,
+            "notes": [
+                "Check if 'is_active' = false for deactivated farmers",
+                "Check if 'status' != 'approved' for blocked products",
+                "Check if 'is_approved' = false for unapproved products"
+            ]
+        })
         
     except Exception as e:
-        print(f"Error getting active farmers: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -----------------------------
-# TEST ENDPOINT
+# CLEAR CACHE ENDPOINT
 # -----------------------------
-@consumer_bp.route('/test', methods=['GET'])
-def test_consumer():
-    """
-    Test endpoint for consumer routes
-    """
+@consumer_bp.route('/clear-cache', methods=['POST'])
+def clear_cache():
+    """Clear any cached data on frontend"""
     return jsonify({
         "status": "success",
-        "message": "Consumer endpoints are working",
-        "note": "All endpoints now filter out inactive farmers (is_active=false)",
-        "endpoints": [
-            "/consumer/nearby-products?lat=...&lon=... (GET)",
-            "/consumer/farmer-details/<id> (GET)",
-            "/consumer/profile (GET)",
-            "/consumer/farmers (GET) - only active farmers",
-            "/consumer/farmer/<id>/products (GET) - only if farmer is active",
-            "/consumer/search?q=...&type=... (GET) - only active farmers/products",
-            "/consumer/active-farmers (GET) - explicit active farmers only"
+        "message": "Frontend cache should be cleared",
+        "instructions": [
+            "1. Clear browser cache (Ctrl+Shift+Delete)",
+            "2. Hard reload page (Ctrl+F5)",
+            "3. Log out and log back in",
+            "4. Check /consumer/debug-data for current data"
         ]
     })
 
+# -----------------------------
+# CHECK SPECIFIC FARMER
+# -----------------------------
+@consumer_bp.route('/check-farmer/<int:farmer_id>', methods=['GET'])
+def check_farmer(farmer_id):
+    """Check specific farmer status"""
+    farmer = User.query.get(farmer_id)
+    
+    if not farmer:
+        return jsonify({"status": "error", "message": "Farmer not found"}), 404
+    
+    products = FarmerItem.query.filter_by(farmer_id=farmer_id).all()
+    
+    return jsonify({
+        "farmer": {
+            "id": farmer.id,
+            "name": farmer.fullname,
+            "is_active": farmer.is_active,
+            "is_email_verified": farmer.is_email_verified,
+            "deactivation_reason": farmer.deactivation_reason,
+            "deactivated_at": farmer.deactivated_at.strftime("%Y-%m-%d %H:%M") if farmer.deactivated_at else None,
+            "status": "ACTIVE" if farmer.is_active else "DEACTIVATED"
+        },
+        "products": [
+            {
+                "id": p.id,
+                "name": p.item_name,
+                "status": p.status,
+                "is_approved": p.is_approved,
+                "stock": p.available_stock,
+                "available_to_consumers": p.status == 'approved' and p.is_approved and farmer.is_active and farmer.is_email_verified
+            } for p in products
+        ],
+        "summary": {
+            "total_products": len(products),
+            "approved_products": len([p for p in products if p.status == 'approved' and p.is_approved]),
+            "available_to_consumers": farmer.is_active and farmer.is_email_verified
+        }
+    })
 
+# -----------------------------
+# UPDATED TEST ENDPOINT
+# -----------------------------
+@consumer_bp.route('/test', methods=['GET'])
+def test_consumer():
+    """Test endpoint with debug info"""
+    return jsonify({
+        "status": "success",
+        "message": "Consumer endpoints are working",
+        "debug_endpoints": [
+            "/consumer/debug-data - Check all farmer/product data",
+            "/consumer/check-farmer/<id> - Check specific farmer",
+            "/consumer/clear-cache - Clear frontend cache"
+        ],
+        "problem": "If seeing deactivated farmer products:",
+        "solutions": [
+            "1. Check /consumer/debug-data to verify farmer is_active status",
+            "2. Clear browser cache (Ctrl+Shift+Delete)",
+            "3. Hard reload (Ctrl+F5)",
+            "4. Check frontend code - might be using cached data"
+        ],
+        "expected_farmers_active": [
+            "Sarju Rana (55) - Active",
+            "Prakriti Paudel (27) - Active", 
+            "Rusmita Chaulagain (52) - Active",
+            "Indira Chaulagain (54) - Active"
+        ],
+        "expected_farmers_blocked": [
+            "Rudra (22) - INACTIVE",
+            "Sarju Rana (37) - INACTIVE",
+            "Milan (28) - INACTIVE"
+        ]
+    })

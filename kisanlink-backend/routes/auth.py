@@ -40,6 +40,20 @@ def signup():
         if not all([fullname, email, password, location, user_type]):
             return jsonify({"error": "All fields are required"}), 400
         
+        if len(fullname) < 2:
+            return jsonify({"error": "Full name must be at least 2 characters"}), 400
+        
+        if len(fullname) > 100:
+            return jsonify({"error": "Full name cannot exceed 100 characters"}), 400
+        
+        if " " not in fullname:
+            return jsonify({"error": "Please enter both first and last name"}), 400
+        
+        if not re.match(r"^[A-Za-z\s]+$", fullname):
+            return jsonify({"error": "Full name can only contain letters and spaces"}), 400
+        
+        fullname = " ".join(fullname.split())
+        
         # Email validation
         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
             return jsonify({"error": "Invalid email format"}), 400
@@ -235,12 +249,13 @@ def verify_email(token):
         if 'conn' in locals():
             conn.close()
 
+
 # -----------------------------
-# LOGIN - Check verification
+# LOGIN - Check verification AND deactivation
 # -----------------------------
 @auth_bp.route("/login", methods=["POST"])
 def login_api():
-    """Login with email verification check"""
+    """Login with email verification AND deactivation check"""
     data = request.get_json()
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
@@ -252,9 +267,10 @@ def login_api():
     cur = conn.cursor()
     
     try:
-        # Get user with verification status
+        # ✅ UPDATED: Get user with verification AND active status
         cur.execute("""
-            SELECT id, password_hash, user_type, fullname, is_email_verified 
+            SELECT id, password_hash, user_type, fullname, 
+                   is_email_verified, is_active 
             FROM users WHERE email = %s
         """, (email,))
         
@@ -263,7 +279,16 @@ def login_api():
         if not user:
             return jsonify({"error": "Account not found. Please sign up first."}), 404
         
-        user_id, db_password, user_type, fullname, is_verified = user
+        # ✅ UPDATED: Unpack with is_active
+        user_id, db_password, user_type, fullname, is_verified, is_active = user
+        
+        # ✅ NEW: Check if user is deactivated
+        if not is_active:
+            return jsonify({
+                "error": "Account is deactivated",
+                "account_status": "deactivated",
+                "contact": "Please contact admin for account reactivation"
+            }), 403
         
         # Check if email is verified
         if not is_verified:
@@ -322,9 +347,9 @@ def resend_verification():
     cur = conn.cursor()
     
     try:
-        # Check user
+        # ✅ UPDATED: Check user with active status
         cur.execute("""
-            SELECT id, fullname, is_email_verified 
+            SELECT id, fullname, is_email_verified, is_active 
             FROM users WHERE email = %s
         """, (email,))
         
@@ -333,7 +358,14 @@ def resend_verification():
         if not user:
             return jsonify({"error": "User not found. Please sign up first."}), 404
         
-        user_id, fullname, is_verified = user
+        user_id, fullname, is_verified, is_active = user
+        
+        # ✅ NEW: Check if user is deactivated
+        if not is_active:
+            return jsonify({
+                "error": "Account is deactivated. Cannot resend verification.",
+                "account_status": "deactivated"
+            }), 403
         
         if is_verified:
             return jsonify({"error": "Email already verified. Please login."}), 400

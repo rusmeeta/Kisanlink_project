@@ -23,7 +23,15 @@ import {
   Activity,
   Edit2,
   Check,
-  X
+  X,
+  User,
+  Flag,
+  MessageSquare,
+  Filter,
+  Search,
+  CheckCircle as CheckCircleIcon,
+  XCircle,
+  Eye as EyeIcon
 } from "lucide-react";
 import axios from "axios";
 
@@ -46,18 +54,20 @@ const AdminDashboard = () => {
   const [recentFarmers, setRecentFarmers] = useState([]);
   const [recentProducts, setRecentProducts] = useState([]);
   const [pendingEditRequests, setPendingEditRequests] = useState([]);
+  const [recentComplaints, setRecentComplaints] = useState([]);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [selectedEditRequest, setSelectedEditRequest] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
   const [timeframe, setTimeframe] = useState("today");
   const [adminName, setAdminName] = useState("Admin");
+  const [complaintFilter, setComplaintFilter] = useState("all");
+  const [complaintReply, setComplaintReply] = useState("");
 
   useEffect(() => {
     checkAdminAuth();
     loadDashboardData();
-    // Refresh every 30 seconds
     const interval = setInterval(loadDashboardData, 30000);
     return () => clearInterval(interval);
   }, [navigate]);
@@ -91,6 +101,67 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadComplaints = async () => {
+    try {
+      console.log("Loading complaints...");
+      
+      // First check if we're authenticated
+      try {
+        const authCheck = await axios.get("http://localhost:5001/admin/check-auth", {
+          withCredentials: true
+        });
+        console.log("Auth check:", authCheck.data);
+      } catch (authErr) {
+        console.log("Auth check failed, might not be admin");
+      }
+      
+      const response = await axios.get("http://localhost:5001/complaints/admin/all", {
+        withCredentials: true
+      });
+      console.log("Complaints API Response:", response.data);
+      
+      if (response.data.success) {
+        const complaints = response.data.complaints || [];
+        console.log("Complaints loaded:", complaints.length, "items");
+        setRecentComplaints(complaints);
+      } else {
+        console.error("API returned success=false:", response.data);
+        // Try the simple endpoint as fallback
+        try {
+          const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
+            withCredentials: true
+          });
+          if (simpleResponse.data.success) {
+            console.log("Using simple test data:", simpleResponse.data.complaints.length);
+            setRecentComplaints(simpleResponse.data.complaints);
+          }
+        } catch (simpleErr) {
+          console.error("Simple test also failed:", simpleErr);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading complaints:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      
+      // Try fallback to simple endpoint
+      try {
+        const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
+          withCredentials: true
+        });
+        if (simpleResponse.data.success) {
+          console.log("Fallback: Using simple test data");
+          setRecentComplaints(simpleResponse.data.complaints);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback also failed:", fallbackErr);
+        setRecentComplaints([]);
+      }
+    }
+  };
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -119,6 +190,9 @@ const AdminDashboard = () => {
       // Load pending edit requests
       await loadEditRequests();
 
+      // Load complaints
+      await loadComplaints();
+
     } catch (err) {
       console.error("Error loading dashboard:", err);
     } finally {
@@ -138,7 +212,7 @@ const AdminDashboard = () => {
       if (response.data.success) {
         alert("Edit request approved successfully!");
         loadEditRequests();
-        loadDashboardData(); // Refresh stats
+        loadDashboardData();
         setSelectedEditRequest(null);
       }
     } catch (err) {
@@ -166,13 +240,42 @@ const AdminDashboard = () => {
       if (response.data.success) {
         alert("Edit request rejected!");
         loadEditRequests();
-        loadDashboardData(); // Refresh stats
+        loadDashboardData();
         setSelectedEditRequest(null);
         setRejectReason("");
       }
     } catch (err) {
       console.error("Error rejecting edit request:", err);
       alert(err.response?.data?.error || "Error rejecting edit request");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUpdateComplaintStatus = async (complaintId, status) => {
+    try {
+      setIsProcessing(true);
+      const response = await axios.put(
+        `http://localhost:5001/complaints/admin/update/${complaintId}`,
+        { 
+          status,
+          admin_reply: complaintReply || `Complaint marked as ${status}`
+        },
+        { withCredentials: true }
+      );
+      
+      console.log("Update complaint response:", response.data);
+      
+      if (response.data.success) {
+        alert(`Complaint marked as ${status}!`);
+        await loadComplaints();
+        setSelectedComplaint(null);
+        setComplaintReply("");
+        await loadDashboardData();
+      }
+    } catch (err) {
+      console.error("Error updating complaint:", err.response?.data || err.message);
+      alert(err.response?.data?.error || "Error updating complaint");
     } finally {
       setIsProcessing(false);
     }
@@ -216,9 +319,39 @@ const AdminDashboard = () => {
     }
   };
 
-  const StatCard = ({ title, value, change, icon, color, link }) => (
-    <div className={`bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow ${link ? 'cursor-pointer hover:border-blue-300' : ''}`}
-         onClick={link ? () => navigate(link) : undefined}>
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'resolved': return 'bg-green-100 text-green-800';
+      case 'dismissed': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Helper function to scroll to section
+  const scrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+      
+      // Add highlight effect
+      element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2');
+      setTimeout(() => {
+        element.classList.remove('ring-2', 'ring-orange-500', 'ring-offset-2');
+      }, 2000);
+      return true;
+    }
+    return false;
+  };
+
+  const StatCard = ({ title, value, change, icon, color, link, onClick }) => (
+    <div 
+      className={`bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow ${(link || onClick) ? 'cursor-pointer hover:border-blue-300' : ''}`}
+      onClick={onClick || (link ? () => navigate(link) : undefined)}
+    >
       <div className="flex justify-between items-start">
         <div>
           <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
@@ -233,7 +366,7 @@ const AdminDashboard = () => {
           {icon}
         </div>
       </div>
-      {link && (
+      {(link || onClick) && (
         <div className="mt-4 flex items-center text-blue-600 text-sm font-medium">
           View details <ArrowRight className="h-4 w-4 ml-1" />
         </div>
@@ -241,26 +374,31 @@ const AdminDashboard = () => {
     </div>
   );
 
-  const QuickAction = ({ title, description, icon, color, link, badge }) => (
-    <Link to={link} className="block">
-      <div className="bg-white rounded-xl p-5 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all group">
-        <div className="flex items-start justify-between mb-3">
-          <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
-            {icon}
-          </div>
-          {badge && (
-            <span className={`text-xs font-medium px-2 py-1 rounded-full ${badge.color}`}>
-              {badge.text}
-            </span>
-          )}
+  const QuickAction = ({ title, description, icon, color, link, badge, onClick }) => (
+    <div
+      onClick={onClick || (link ? () => navigate(link) : undefined)}
+      className={`bg-white rounded-xl p-5 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all group cursor-pointer ${onClick || link ? '' : 'cursor-default'}`}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
+          {icon}
         </div>
-        <h4 className="font-semibold text-gray-900 mb-2">{title}</h4>
-        <p className="text-sm text-gray-600">{description}</p>
-        <div className="mt-4 flex items-center text-blue-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-          Take action <ArrowRight className="h-4 w-4 ml-1" />
-        </div>
+        {badge && (
+          <span className={`text-xs font-medium px-2 py-1 rounded-full ${badge.color}`}>
+            {badge.text}
+          </span>
+        )}
       </div>
-    </Link>
+      <h4 className="font-semibold text-gray-900 mb-2">{title}</h4>
+      <p className="text-sm text-gray-600">{description}</p>
+      <div className="mt-4 flex items-center text-blue-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+        {(onClick || link) && (
+          <>
+            Take action <ArrowRight className="h-4 w-4 ml-1" />
+          </>
+        )}
+      </div>
+    </div>
   );
 
   if (loading) {
@@ -273,6 +411,12 @@ const AdminDashboard = () => {
       </div>
     );
   }
+
+  // Calculate complaint statistics
+  const pendingComplaints = recentComplaints.filter(c => c.status === 'pending').length;
+  const resolvedComplaints = recentComplaints.filter(c => c.status === 'resolved').length;
+  const dismissedComplaints = recentComplaints.filter(c => c.status === 'dismissed').length;
+  const totalComplaints = recentComplaints.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -334,41 +478,50 @@ const AdminDashboard = () => {
         </div>
 
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatCard
-            title="Total Users"
-            value={stats.totalUsers}
-            change={12}
-            icon={<Users className="h-6 w-6 text-blue-600" />}
-            color="bg-blue-100"
+            title="Total Farmers"
+            value={stats.totalFarmers}
+            change={8}
+            icon={<UserCheck className="h-6 w-6 text-green-600" />}
+            color="bg-green-100"
             link="/admin/farmers"
+          />
+          
+          <StatCard
+            title="Total Consumers"
+            value={stats.totalConsumers}
+            change={12}
+            icon={<User className="h-6 w-6 text-purple-600" />}
+            color="bg-purple-100"
+            link="/admin/consumers"
           />
           
           <StatCard
             title="Active Products"
             value={stats.approvedProducts}
             change={8}
-            icon={<Package className="h-6 w-6 text-green-600" />}
-            color="bg-green-100"
+            icon={<Package className="h-6 w-6 text-blue-600" />}
+            color="bg-blue-100"
             link="/admin/products"
+          />
+          
+          <StatCard
+            title="Pending Complaints"
+            value={pendingComplaints}
+            change={15}
+            icon={<Flag className="h-6 w-6 text-orange-600" />}
+            color="bg-orange-100"
+            onClick={() => scrollToSection('complaints-section')}
           />
           
           <StatCard
             title="Pending Approvals"
             value={stats.pendingProducts + pendingEditRequests.length}
             change={-3}
-            icon={<Clock className="h-6 w-6 text-orange-600" />}
-            color="bg-orange-100"
+            icon={<Clock className="h-6 w-6 text-yellow-600" />}
+            color="bg-yellow-100"
             link="/admin/products/pending"
-          />
-          
-          <StatCard
-            title="Low Stock Alerts"
-            value={stats.lowStockProducts}
-            change={5}
-            icon={<AlertTriangle className="h-6 w-6 text-red-600" />}
-            color="bg-red-100"
-            link="/admin/low-stock-products"
           />
         </div>
 
@@ -377,43 +530,193 @@ const AdminDashboard = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <QuickAction
+              title="Review Complaints"
+              description={`${pendingComplaints} complaints awaiting review`}
+              icon={<Flag className="h-6 w-6 text-orange-600" />}
+              color="bg-orange-100"
+              onClick={() => scrollToSection('complaints-section')}
+              badge={{ text: "Action Required", color: "bg-orange-100 text-orange-800" }}
+            />
+            
+            <QuickAction
               title="Review Products"
               description={`${stats.pendingProducts} products awaiting approval`}
-              icon={<FileText className="h-6 w-6 text-orange-600" />}
-              color="bg-orange-100"
+              icon={<FileText className="h-6 w-6 text-blue-600" />}
+              color="bg-blue-100"
               link="/admin/products/pending"
-              badge={{ text: "Action Required", color: "bg-orange-100 text-orange-800" }}
             />
             
             <QuickAction
               title="Review Edits"
               description={`${pendingEditRequests.length} edit requests pending`}
-              icon={<Edit2 className="h-6 w-6 text-blue-600" />}
-              color="bg-blue-100"
-              link="/admin/edit-requests"
+              icon={<Edit2 className="h-6 w-6 text-purple-600" />}
+              color="bg-purple-100"
+              onClick={() => {
+                if (pendingEditRequests.length > 0) {
+                  scrollToSection('edit-requests');
+                } else {
+                  navigate('/admin/edit-requests');
+                }
+              }}
               badge={{ 
                 text: `${pendingEditRequests.length} Pending`, 
-                color: "bg-blue-100 text-blue-800" 
+                color: "bg-purple-100 text-purple-800" 
               }}
             />
             
             <QuickAction
               title="Stock Alerts"
               description={`${stats.lowStockProducts} products need attention`}
-              icon={<Bell className="h-6 w-6 text-red-600" />}
+              icon={<AlertTriangle className="h-6 w-6 text-red-600" />}
               color="bg-red-100"
               link="/admin/low-stock-products"
               badge={{ text: `${stats.criticalStockProducts} Critical`, color: "bg-red-100 text-red-800" }}
             />
-            
-            <QuickAction
-              title="Manage Farmers"
-              description={`Manage ${stats.totalFarmers} farmer accounts`}
-              icon={<UserCheck className="h-6 w-6 text-green-600" />}
-              color="bg-green-100"
-              link="/admin/farmers"
-            />
           </div>
+        </div>
+
+        {/* Complaints Management Section */}
+        <div id="complaints-section" className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Flag className="h-5 w-5 text-orange-600 mr-2" />
+                Recent Complaints
+              </h3>
+              <p className="text-sm text-gray-600">
+                {totalComplaints} total complaints • {pendingComplaints} pending
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex space-x-2">
+                {['all', 'pending', 'resolved', 'dismissed'].map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setComplaintFilter(filter)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg capitalize ${
+                      complaintFilter === filter
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={loadComplaints}
+                className="flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Complaint Stats Summary */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="bg-yellow-50 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-yellow-700">{pendingComplaints}</div>
+              <div className="text-sm text-yellow-600">Pending</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-green-700">{resolvedComplaints}</div>
+              <div className="text-sm text-green-600">Resolved</div>
+            </div>
+            <div className="bg-red-50 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-red-700">{dismissedComplaints}</div>
+              <div className="text-sm text-red-600">Dismissed</div>
+            </div>
+          </div>
+
+          {/* Complaints List */}
+          {recentComplaints.length === 0 ? (
+            <div className="text-center py-8">
+              <Flag className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No complaints found</p>
+              <p className="text-sm text-gray-500 mt-2">All complaints have been addressed</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {recentComplaints
+                .filter(complaint => complaintFilter === 'all' || complaint.status === complaintFilter)
+                .slice(0, 5)
+                .map((complaint) => (
+                  <div key={complaint.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(complaint.status)}`}>
+                            {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ID: #{complaint.id}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            • {complaint.user_type}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 mb-2">{complaint.complaint_text}</p>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span>{complaint.user_name || 'Anonymous'}</span>
+                          <span className="mx-2">•</span>
+                          <span>{formatDateTime(complaint.created_at)}</span>
+                        </div>
+                        
+                        {complaint.admin_reply && (
+                          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <MessageSquare className="w-4 h-4 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-700">Admin Response:</span>
+                            </div>
+                            <p className="text-sm text-gray-800">{complaint.admin_reply}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col space-y-2 ml-4">
+                        <button
+                          onClick={() => setSelectedComplaint(complaint)}
+                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center"
+                        >
+                          <EyeIcon className="h-3 w-3 mr-1" />
+                          View
+                        </button>
+                        {complaint.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateComplaintStatus(complaint.id, 'resolved')}
+                              className="px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm flex items-center"
+                            >
+                              <CheckCircleIcon className="h-3 w-3 mr-1" />
+                              Resolve
+                            </button>
+                            <button
+                              onClick={() => handleUpdateComplaintStatus(complaint.id, 'dismissed')}
+                              className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm flex items-center"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Dismiss
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              
+              {recentComplaints.length > 5 && (
+                <div className="text-center pt-2">
+                  <Link 
+                    to="/admin/complaints"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center"
+                  >
+                    View all {recentComplaints.length} complaints
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pending Edit Requests Section */}
@@ -481,7 +784,7 @@ const AdminDashboard = () => {
               {pendingEditRequests.length > 3 && (
                 <div className="text-center pt-2">
                   <button
-                    onClick={() => {/* You can create a separate page for all edit requests */}}
+                    onClick={() => navigate('/admin/edit-requests')}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
                     View all {pendingEditRequests.length} edit requests →
@@ -561,33 +864,63 @@ const AdminDashboard = () => {
                   </div>
                 </div>
 
-                {/* Stock Status */}
+                {/* Complaint Status */}
                 <div>
                   <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-                    <Activity className="h-5 w-5 text-gray-400 mr-2" />
-                    Stock Status
+                    <Flag className="h-5 w-5 text-gray-400 mr-2" />
+                    Complaint Status
                   </h4>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">In Stock</span>
-                      <span className="font-semibold text-green-600">
-                        {stats.approvedProducts - stats.lowStockProducts - (stats.outOfStockProducts || 0)}
-                      </span>
+                      <span className="text-gray-600">Pending</span>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{pendingComplaints}</span>
+                        <div className="ml-2 h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-yellow-500 rounded-full"
+                            style={{ width: `${(pendingComplaints / totalComplaints) * 100 || 0}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Low Stock</span>
-                      <span className="font-semibold text-yellow-600">{stats.lowStockProducts}</span>
+                      <span className="text-gray-600">Resolved</span>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{resolvedComplaints}</span>
+                        <div className="ml-2 h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(resolvedComplaints / totalComplaints) * 100 || 0}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Critical</span>
-                      <span className="font-semibold text-red-600">{stats.criticalStockProducts}</span>
+                      <span className="text-gray-600">Dismissed</span>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{dismissedComplaints}</span>
+                        <div className="ml-2 h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-500 rounded-full"
+                            style={{ width: `${(dismissedComplaints / totalComplaints) * 100 || 0}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Out of Stock</span>
-                      <span className="font-semibold text-gray-600">{stats.outOfStockProducts || 0}</span>
+                      <span className="text-gray-600">Total Complaints</span>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{totalComplaints}</span>
+                        <div className="ml-2 h-2 w-16 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -650,7 +983,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                      <Users className="h-5 w-5 text-green-600" />
+                      <UserCheck className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">Farmers</p>
@@ -663,7 +996,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                      <ShoppingCart className="h-5 w-5 text-purple-600" />
+                      <User className="h-5 w-5 text-purple-600" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">Consumers</p>
@@ -691,25 +1024,43 @@ const AdminDashboard = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Links</h3>
               
               <div className="space-y-3">
-                <Link to="/admin/products/pending" className="flex items-center justify-between p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors group">
+                <button
+                  onClick={() => scrollToSection('complaints-section')}
+                  className="w-full flex items-center justify-between p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors group text-left"
+                >
                   <div className="flex items-center">
-                    <Clock className="h-5 w-5 text-orange-600 mr-3" />
+                    <Flag className="h-5 w-5 text-orange-600 mr-3" />
+                    <span className="font-medium text-gray-900">Review Complaints</span>
+                  </div>
+                  <div className="flex items-center">
+                    {pendingComplaints > 0 && (
+                      <span className="mr-2 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        {pendingComplaints}
+                      </span>
+                    )}
+                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-orange-600" />
+                  </div>
+                </button>
+                
+                <Link to="/admin/products/pending" className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors group">
+                  <div className="flex items-center">
+                    <Clock className="h-5 w-5 text-yellow-600 mr-3" />
                     <span className="font-medium text-gray-900">Review Products</span>
                   </div>
                   <div className="flex items-center">
                     {stats.pendingProducts > 0 && (
-                      <span className="mr-2 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                      <span className="mr-2 bg-yellow-600 text-white text-xs font-bold px-2 py-1 rounded-full">
                         {stats.pendingProducts}
                       </span>
                     )}
-                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-orange-600" />
+                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-yellow-600" />
                   </div>
                 </Link>
                 
                 {pendingEditRequests.length > 0 && (
                   <button
-                    onClick={() => document.getElementById('edit-requests')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="w-full flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group"
+                    onClick={() => scrollToSection('edit-requests')}
+                    className="w-full flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group text-left"
                   >
                     <div className="flex items-center">
                       <Edit2 className="h-5 w-5 text-blue-600 mr-3" />
@@ -738,14 +1089,6 @@ const AdminDashboard = () => {
                     <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-red-600" />
                   </div>
                 </Link>
-                
-                <Link to="/admin/farmers" className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors group">
-                  <div className="flex items-center">
-                    <UserCheck className="h-5 w-5 text-green-600 mr-3" />
-                    <span className="font-medium text-gray-900">Manage Farmers</span>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600" />
-                </Link>
               </div>
             </div>
           </div>
@@ -771,6 +1114,125 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Complaint Detail Modal */}
+      {selectedComplaint && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Complaint Details</h3>
+                  <p className="text-gray-600">Complaint ID: #{selectedComplaint.id}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedComplaint(null);
+                    setComplaintReply('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* User Information */}
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">User Information</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm text-gray-600">Name:</span>
+                    <p className="font-medium">{selectedComplaint.user_name || 'Anonymous'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Email:</span>
+                    <p className="font-medium">{selectedComplaint.user_email || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">User Type:</span>
+                    <p className="font-medium capitalize">{selectedComplaint.user_type}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Submitted:</span>
+                    <p className="font-medium">{formatDateTime(selectedComplaint.created_at)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Complaint Content */}
+              <div className="bg-red-50 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-red-800 mb-3">Complaint Text</h4>
+                <p className="text-gray-800 whitespace-pre-wrap">{selectedComplaint.complaint_text}</p>
+              </div>
+
+              {/* Current Status */}
+              <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-blue-800 mb-3">Current Status</h4>
+                <div className="flex items-center gap-4">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedComplaint.status)}`}>
+                    {selectedComplaint.status.toUpperCase()}
+                  </span>
+                  {selectedComplaint.admin_reply && (
+                    <div>
+                      <p className="text-sm text-gray-700">Admin Reply: {selectedComplaint.admin_reply}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Admin Response */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Admin Response</h4>
+                <textarea
+                  value={complaintReply}
+                  onChange={(e) => setComplaintReply(e.target.value)}
+                  placeholder="Type your response to the user..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                  rows="4"
+                />
+                <p className="text-sm text-gray-500 mt-2">
+                  This response will be visible to the user when marked as resolved
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setSelectedComplaint(null);
+                    setComplaintReply('');
+                  }}
+                  className="px-5 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  Cancel
+                </button>
+                
+                <button
+                  onClick={() => handleUpdateComplaintStatus(selectedComplaint.id, 'dismissed')}
+                  className="px-5 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 font-medium"
+                >
+                  Dismiss Complaint
+                </button>
+                
+                <button
+                  onClick={() => handleUpdateComplaintStatus(selectedComplaint.id, 'resolved')}
+                  disabled={isProcessing}
+                  className="px-5 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Processing...
+                    </div>
+                  ) : (
+                    "Mark as Resolved"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Request Detail Modal */}
       {selectedEditRequest && (
