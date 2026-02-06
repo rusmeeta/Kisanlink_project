@@ -1,4 +1,4 @@
-# notifications.py - FINAL FIXED VERSION
+# notifications.py - COMPLETE VERSION WITH READ ENDPOINT
 from flask import Blueprint, jsonify, session
 from extensions import db
 from models_notification import Notification
@@ -84,3 +84,108 @@ def get_notifications():
         "notifications": data,
         "current_user_type": user_type
     })
+
+# CRITICAL: This endpoint was missing!
+@notifications_bp.route("/<int:notification_id>/read", methods=["POST"])
+def mark_notification_as_read(notification_id):
+    """Mark a notification as read for the current user"""
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        user_id = session["user_id"]
+        
+        # Find notification for this user
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=user_id
+        ).first()
+        
+        if not notification:
+            print(f"❌ Notification {notification_id} not found for user {user_id}")
+            return jsonify({"status": "error", "message": "Notification not found"}), 404
+        
+        print(f"📝 Marking notification {notification_id} as read for user {user_id}")
+        print(f"   Current is_read: {notification.is_read}")
+        
+        # Mark as read
+        notification.is_read = True
+        db.session.commit()
+        
+        print(f"✅ Successfully marked notification {notification_id} as read")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Notification marked as read",
+            "notification_id": notification_id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error marking notification {notification_id} as read: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# Optional: Mark all notifications as read
+@notifications_bp.route("/mark-all-read", methods=["POST"])
+def mark_all_notifications_as_read():
+    """Mark all notifications as read for the current user"""
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        user_id = session["user_id"]
+        
+        # Find all unread notifications for this user
+        notifications = Notification.query.filter_by(
+            user_id=user_id,
+            is_read=False
+        ).all()
+        
+        count = len(notifications)
+        
+        # Mark all as read
+        for notification in notifications:
+            notification.is_read = True
+        
+        db.session.commit()
+        
+        print(f"✅ Marked {count} notifications as read for user {user_id}")
+        
+        return jsonify({
+            "status": "success", 
+            "message": f"Marked {count} notifications as read",
+            "count": count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error marking all notifications as read: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+# Add this endpoint to your notifications.py file
+@notifications_bp.route("/unread-count", methods=["GET"])
+def get_unread_count():
+    """Get count of unread notifications for current user"""
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    try:
+        user_id = session["user_id"]
+        
+        # Count unread notifications
+        unread_count = Notification.query.filter_by(
+            user_id=user_id,
+            is_read=False
+        ).count()
+        
+        print(f"📊 Unread notifications for user {user_id}: {unread_count}")
+        
+        return jsonify({
+            "status": "success",
+            "success": True,  # Add this for compatibility
+            "count": unread_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error counting unread notifications: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500

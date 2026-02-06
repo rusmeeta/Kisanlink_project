@@ -106,38 +106,50 @@ const ConsumerChat = () => {
   };
 
   // Fetch messages
-  const fetchMessages = async () => {
-    if (!farmerId) return;
+  // In ConsumerChat.jsx, update the fetchMessages function:
+const fetchMessages = async () => {
+  if (!farmerId) return;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/messages/${farmerId}`, {
-        credentials: "include",
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/messages/${farmerId}`, {
+      credentials: "include",
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Messages response:", data); // Debug
+    if (response.ok) {
+      const data = await response.json();
+      console.log("Messages response:", data);
 
-        if (data.status === "success") {
-          setMessages(data.messages || []);
+      if (data.status === "success") {
+        setMessages(data.messages || []);
 
-          // Also try to get farmer name from messages if we don't have it
-          if (data.other_user && !farmerDetails) {
-            setFarmerDetails({
-              fullname: data.other_user.fullname || `Farmer ${farmerId}`,
-              email: data.other_user.email || "",
-              location: data.other_user.location || "Unknown location",
-              id: farmerId
-            });
-          }
+        // MARK MESSAGES AS SEEN when opening/fetching messages
+        await fetch(`${API_BASE_URL}/messages/mark-seen/${farmerId}`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+
+        // Send event to parent to refresh conversations
+        window.dispatchEvent(new CustomEvent('messages-marked-read', {
+          detail: { farmerId }
+        }));
+
+        // Also try to get farmer name from messages if we don't have it
+        if (data.other_user && !farmerDetails) {
+          setFarmerDetails({
+            fullname: data.other_user.fullname || `Farmer ${farmerId}`,
+            email: data.other_user.email || "",
+            location: data.other_user.location || "Unknown location",
+            id: farmerId
+          });
         }
       }
-    } catch (err) {
-      console.error("Failed to fetch messages:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    console.error("Failed to fetch messages:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Handle file upload
   const handleFileUpload = async () => {
@@ -501,28 +513,7 @@ const ConsumerChat = () => {
       <div className="border-t border-gray-200 bg-white p-4 flex-shrink-0">
         <div className="flex space-x-2">
           {/* File Upload Button */}
-          <div className="relative">
-            <button
-              onClick={handleFileButtonClick}
-              disabled={uploading || sending}
-              className="flex-shrink-0 p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Attach file (max 10MB)"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFileSelect}
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
-              />
-            </button>
-            {selectedFile && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
-            )}
-          </div>
+          
 
           {/* Message Input */}
           <div className="flex-1 relative">
@@ -562,15 +553,7 @@ const ConsumerChat = () => {
           </button>
         </div>
 
-        <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
-          <div className="flex items-center">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Drag & drop files anywhere or click the paperclip icon</span>
-          </div>
-          <span>Max 10MB</span>
-        </div>
+        
       </div>
     </div>
   );

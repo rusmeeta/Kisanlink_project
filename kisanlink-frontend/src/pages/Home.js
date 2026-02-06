@@ -163,18 +163,35 @@ const Home = () => {
     }
   };
 
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setAdminError("");
-    setLoading(true);
+  // In Home.jsx - Update handleAdminLogin function
+const handleAdminLogin = async (e) => {
+  e.preventDefault();
+  console.log("🔍 Attempting admin login with:", adminCredentials);
+  setAdminError("");
+  setLoading(true);
 
-    // SIMPLE DEMO LOGIN - This will always work
-    // Use these credentials: admin@kisanlink.com / admin123
-    if (adminCredentials.email === "admin@kisanlink.com" && adminCredentials.password === "admin123") {
-      // Store authentication info
+  try {
+    // Call your backend admin login endpoint
+    const response = await fetch("http://localhost:5001/admin/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // CRITICAL: This sends cookies/session
+      body: JSON.stringify(adminCredentials),
+    });
+
+    console.log("🔍 Response status:", response.status);
+    const data = await response.json();
+    console.log("🔍 Response data:", data);
+
+    if (data.success) {
+      console.log("✅ Admin login successful via backend!");
+      
+      // Store in localStorage as backup
       localStorage.setItem("adminLoggedIn", "true");
       localStorage.setItem("adminEmail", adminCredentials.email);
-      localStorage.setItem("adminName", "Admin");
+      localStorage.setItem("adminName", data.user_name || "Admin");
       
       // Close modal and reset form
       setShowAdminModal(false);
@@ -183,13 +200,17 @@ const Home = () => {
       
       // Navigate to admin dashboard
       navigate("/admin/dashboard");
-      return;
+    } else {
+      console.log("❌ Backend login failed:", data.error);
+      setAdminError(data.error || "Invalid credentials");
+      setLoading(false);
     }
-
-    // If not demo credentials, show error
-    setAdminError("Invalid credentials. Use: admin@kisanlink.com / admin123");
+  } catch (error) {
+    console.error("❌ Network error:", error);
+    setAdminError("Network error. Please check if backend is running on localhost:5001");
     setLoading(false);
-  };
+  }
+};
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -715,9 +736,7 @@ const Home = () => {
                       required
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Demo credentials: admin@kisanlink.com / admin123
-                  </p>
+                  
                 </div>
 
                 {/* Error Message */}

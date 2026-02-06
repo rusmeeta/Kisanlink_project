@@ -326,3 +326,108 @@ def test_consumer():
             "Milan (28) - INACTIVE"
         ]
     })
+
+# Add this to your consumer_bp in consumer.py
+
+# -----------------------------
+# GET MESSAGES WITH FARMER - For Consumer
+# -----------------------------
+@consumer_bp.route('/messages/<int:farmer_id>', methods=['GET'])
+def get_consumer_farmer_messages(farmer_id):
+    """Get messages between consumer and specific farmer"""
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    consumer_id = session["user_id"]
+    
+    # Verify farmer exists
+    farmer = User.query.get(farmer_id)
+    if not farmer or farmer.user_type != 'farmer':
+        return jsonify({"status": "error", "message": "Farmer not found"}), 404
+    
+    # Get messages between consumer and farmer
+    messages = Message.query.filter(
+        or_(
+            and_(Message.sender_id == consumer_id, Message.receiver_id == farmer_id),
+            and_(Message.sender_id == farmer_id, Message.receiver_id == consumer_id)
+        )
+    ).order_by(Message.timestamp.asc()).all()
+    
+    # Format messages
+    messages_data = []
+    for msg in messages:
+        sender = User.query.get(msg.sender_id)
+        messages_data.append({
+            "id": msg.id,
+            "sender_id": msg.sender_id,
+            "receiver_id": msg.receiver_id,
+            "message": msg.content,
+            "created_at": msg.timestamp.isoformat() if msg.timestamp else None,
+            "file_url": msg.file_url,
+            "file_name": msg.file_name,
+            "file_type": msg.file_type,
+            "sender_name": sender.fullname if sender else "Unknown"
+        })
+    
+    return jsonify({
+        "status": "success",
+        "messages": messages_data,
+        "other_user": {
+            "id": farmer.id,
+            "fullname": farmer.fullname,
+            "email": farmer.email,
+            "location": farmer.location,
+            "user_type": farmer.user_type
+        }
+    })
+
+# -----------------------------
+# SEND MESSAGE TO FARMER - For Consumer
+# -----------------------------
+@consumer_bp.route('/messages/<int:farmer_id>/send', methods=['POST'])
+def send_consumer_message(farmer_id):
+    """Send message from consumer to farmer"""
+    if "user_id" not in session:
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    consumer_id = session["user_id"]
+    data = request.get_json()
+    
+    if not data or ("message" not in data and "file_url" not in data):
+        return jsonify({"status": "error", "message": "Message or file is required"}), 400
+    
+    # Verify farmer exists
+    farmer = User.query.get(farmer_id)
+    if not farmer or farmer.user_type != 'farmer':
+        return jsonify({"status": "error", "message": "Farmer not found"}), 404
+    
+    # Create message
+    new_message = Message(
+        sender_id=consumer_id,
+        receiver_id=farmer_id,
+        content=data.get("message", "").strip(),
+        file_url=data.get("file_url"),
+        file_name=data.get("file_name"),
+        file_type=data.get("file_type")
+    )
+    
+    db.session.add(new_message)
+    db.session.commit()
+    
+    # Get sender info
+    sender = User.query.get(consumer_id)
+    
+    return jsonify({
+        "status": "success",
+        "message": {
+            "id": new_message.id,
+            "sender_id": new_message.sender_id,
+            "receiver_id": new_message.receiver_id,
+            "message": new_message.content,
+            "created_at": new_message.timestamp.isoformat() if new_message.timestamp else None,
+            "file_url": new_message.file_url,
+            "file_name": new_message.file_name,
+            "file_type": new_message.file_type,
+            "sender_name": sender.fullname if sender else "Unknown"
+        }
+    })

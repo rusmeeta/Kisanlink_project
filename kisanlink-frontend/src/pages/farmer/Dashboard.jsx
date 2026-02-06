@@ -1,10 +1,10 @@
-// src/pages/farmer/Dashboard.jsx
-import React, { useEffect, useState } from "react";
+// src/pages/farmer/Dashboard.jsx - UPDATED VERSION
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
   Bell, MessageCircle, Edit3, Mail, MapPin,
   Package, ShoppingCart, Clock, Truck, CheckCircle,
-  Flag, Eye
+  Flag, Eye, RefreshCw
 } from "lucide-react";
 
 const FarmerDashboard = () => {
@@ -19,10 +19,16 @@ const FarmerDashboard = () => {
     pendingNotifications: 0,
     pendingOrders: 0
   });
+  
+  // Unread counts state
   const [unreadCounts, setUnreadCounts] = useState({
     notifications: 0,
     messages: 0
   });
+  
+  // Refresh states
+  const [refreshingNotifications, setRefreshingNotifications] = useState(false);
+  const [refreshingMessages, setRefreshingMessages] = useState(false);
   
   // Complaint State
   const [showComplaintBox, setShowComplaintBox] = useState(false);
@@ -40,6 +46,7 @@ const FarmerDashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const API_BASE_URL = "http://localhost:5001";
   
   const getActiveTab = () => {
     const path = location.pathname;
@@ -57,7 +64,7 @@ const FarmerDashboard = () => {
   // Fetch farmer data
   const fetchFarmerData = async () => {
     try {
-      const res = await fetch("http://localhost:5001/farmer/me", {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
         method: "GET",
         credentials: "include",
       });
@@ -70,6 +77,129 @@ const FarmerDashboard = () => {
     }
   };
 
+  // Fetch unread notifications count
+  const fetchUnreadNotifications = useCallback(async () => {
+    try {
+      setRefreshingNotifications(true);
+      const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setUnreadCounts(prev => ({ ...prev, notifications: data.count || 0 }));
+          setStats(prev => ({ ...prev, pendingNotifications: data.count || 0 }));
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching notifications count:", err);
+    } finally {
+      setRefreshingNotifications(false);
+    }
+  }, []);
+
+  // Fetch unread messages count
+  const fetchUnreadMessages = useCallback(async () => {
+    try {
+      setRefreshingMessages(true);
+      const response = await fetch(`${API_BASE_URL}/messages/farmer-conversations`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === "success") {
+          // Calculate total unread messages
+          const totalUnreadMessages = (data.conversations || []).reduce(
+            (total, conv) => total + (conv.unread_count || 0), 0
+          );
+          setUnreadCounts(prev => ({ ...prev, messages: totalUnreadMessages }));
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching messages count:", err);
+    } finally {
+      setRefreshingMessages(false);
+    }
+  }, []);
+
+  // Combined refresh function
+  const refreshDashboardData = useCallback(() => {
+    if (user) {
+      fetchUnreadNotifications();
+      fetchUnreadMessages();
+      fetchRecentOrders();
+      fetchStats();
+    }
+  }, [user, fetchUnreadNotifications, fetchUnreadMessages]);
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    if (!user) return;
+    
+    refreshDashboardData(); // Initial fetch
+    
+    const interval = setInterval(() => {
+      refreshDashboardData();
+    }, POLL_INTERVAL);
+    
+    return () => clearInterval(interval);
+  }, [user, refreshDashboardData]);
+
+  // Refresh when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user && !refreshingNotifications && !refreshingMessages) {
+        refreshDashboardData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, refreshingNotifications, refreshingMessages, refreshDashboardData]);
+
+  // Listen for notifications-marked-read events
+  useEffect(() => {
+    const handleNotificationsMarkedRead = () => {
+      // Refresh unread notifications count
+      fetchUnreadNotifications();
+    };
+
+    window.addEventListener('notifications-marked-read', handleNotificationsMarkedRead);
+    
+    return () => {
+      window.removeEventListener('notifications-marked-read', handleNotificationsMarkedRead);
+    };
+  }, [fetchUnreadNotifications]);
+
+  // Listen for messages-marked-read events
+  useEffect(() => {
+    const handleMessagesMarkedRead = () => {
+      // Refresh unread messages count
+      fetchUnreadMessages();
+    };
+
+    window.addEventListener('messages-marked-read', handleMessagesMarkedRead);
+    
+    return () => {
+      window.removeEventListener('messages-marked-read', handleMessagesMarkedRead);
+    };
+  }, [fetchUnreadMessages]);
+
   // Fetch recent orders
   const fetchRecentOrders = async () => {
     try {
@@ -79,7 +209,7 @@ const FarmerDashboard = () => {
         return;
       }
 
-      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+      const response = await fetch(`${API_BASE_URL}/orders/farmer/${farmerId}`, {
         credentials: "include",
       });
       
@@ -116,7 +246,7 @@ const FarmerDashboard = () => {
     if (!user) return;
     setComplaintsLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/complaints/my-complaints", {
+      const response = await fetch(`${API_BASE_URL}/complaints/my-complaints`, {
         credentials: "include",
       });
       
@@ -154,7 +284,7 @@ const FarmerDashboard = () => {
 
     setLoadingComplaint(true);
     try {
-      const response = await fetch("http://localhost:5001/complaints/submit", {
+      const response = await fetch(`${API_BASE_URL}/complaints/submit`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +314,7 @@ const FarmerDashboard = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch("http://localhost:5001/orders/update-status", {
+      const response = await fetch(`${API_BASE_URL}/orders/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: "include",
@@ -208,59 +338,12 @@ const FarmerDashboard = () => {
     }
   };
 
-  // Fetch notifications
-  const fetchNotifications = async () => {
-    try {
-      const res = await fetch("http://localhost:5001/notifications", {
-        method: "GET",
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const notifs = data.notifications || [];
-        setNotifications(notifs);
-
-        const unread = notifs.filter(n => !n.is_read).length;
-        setUnreadCounts(prev => ({ ...prev, notifications: unread }));
-        setStats(prev => ({ ...prev, pendingNotifications: unread }));
-      }
-    } catch (err) {
-      console.error("Error fetching notifications:", err);
-    }
-  };
-
-  // Fetch messages
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch("http://localhost:5001/messages/farmer-conversations", {
-        method: "GET",
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === "success") {
-          const conversations = data.conversations || [];
-          setMessages(conversations);
-          
-          const unreadCount = conversations.reduce((count, conv) => {
-            return count + (conv.unread_count || 0);
-          }, 0);
-          
-          setUnreadCounts(prev => ({ ...prev, messages: unreadCount }));
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching messages:", err);
-    }
-  };
-
   // Fetch farmer statistics
   const fetchStats = async () => {
     if (!user) return;
 
     try {
-      const productsRes = await fetch("http://localhost:5001/farmer/products", {
+      const productsRes = await fetch(`${API_BASE_URL}/farmer/products`, {
         credentials: "include",
       });
       
@@ -275,7 +358,7 @@ const FarmerDashboard = () => {
       }
 
       try {
-        const ordersRes = await fetch(`http://localhost:5001/api/farmer/report/${user.id}`, {
+        const ordersRes = await fetch(`${API_BASE_URL}/api/farmer/report/${user.id}`, {
           credentials: "include",
         });
         
@@ -304,7 +387,7 @@ const FarmerDashboard = () => {
   // Fetch recent activities
   const fetchRecentActivities = async () => {
     try {
-      const res = await fetch("http://localhost:5001/notifications", {
+      const res = await fetch(`${API_BASE_URL}/notifications`, {
         method: "GET",
         credentials: "include",
       });
@@ -377,8 +460,6 @@ const FarmerDashboard = () => {
   // Initial fetch
   useEffect(() => {
     fetchFarmerData();
-    fetchNotifications();
-    fetchMessages();
     fetchStats();
     fetchRecentActivities();
     fetchRecentOrders();
@@ -390,27 +471,14 @@ const FarmerDashboard = () => {
       fetchStats();
       fetchRecentOrders();
       fetchUserComplaints();
+      fetchUnreadNotifications();
+      fetchUnreadMessages();
     }
   }, [user]);
 
-  // Real-time polling
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (activeTab === "dashboard") {
-        fetchNotifications();
-        fetchMessages();
-        fetchStats();
-        fetchRecentActivities();
-        fetchRecentOrders();
-      }
-    }, POLL_INTERVAL);
-
-    return () => clearInterval(interval);
-  }, [activeTab]);
-
   const handleLogout = async () => {
     try {
-      await fetch("http://localhost:5001/auth/logout", {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
@@ -420,6 +488,17 @@ const FarmerDashboard = () => {
     }
   };
 
+  // Handle manual refresh
+  const handleManualRefresh = () => {
+    setRefreshingNotifications(true);
+    setRefreshingMessages(true);
+    refreshDashboardData();
+    setTimeout(() => {
+      setRefreshingNotifications(false);
+      setRefreshingMessages(false);
+    }, 1000);
+  };
+
   // Sidebar navigation items
   const navItems = [
     { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
@@ -427,79 +506,79 @@ const FarmerDashboard = () => {
     { id: "productList", label: "Product List", path: "/farmer/products" },
     { id: "orders", label: "Orders", path: "/farmer/orders" },
     { id: "reports", label: "Reports", path: "/farmer/report" },
-    { id: "notifications", label: `Notifications (${unreadCounts.notifications})`, path: "/farmer/notifications" },
+    { 
+      id: "notifications", 
+      label: `Notifications (${unreadCounts.notifications})`, 
+      path: "/farmer/notifications" 
+    },
   ];
 
   // Complaint Modal Component
-  // Complaint Modal Component - FIXED VERSION
-const ComplaintModal = () => {
-  const textareaRef = React.useRef(null);
-  
-  // Focus only once when modal opens
-  React.useEffect(() => {
-    if (textareaRef.current && showComplaintBox) {
-      textareaRef.current.focus();
-      // Move cursor to end
-      const length = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(length, length);
-    }
-  }, [showComplaintBox]); // Only run when showComplaintBox changes
+  const ComplaintModal = () => {
+    const textareaRef = React.useRef(null);
+    
+    React.useEffect(() => {
+      if (textareaRef.current && showComplaintBox) {
+        textareaRef.current.focus();
+        const length = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, [showComplaintBox]);
 
-  // Use useCallback to prevent function recreation on every render
-  const handleTextChange = React.useCallback((e) => {
-    setComplaintText(e.target.value);
-  }, []);
+    const handleTextChange = React.useCallback((e) => {
+      setComplaintText(e.target.value);
+    }, []);
 
-  const handleSubmit = React.useCallback(() => {
-    submitComplaint();
-  }, []);
+    const handleSubmit = React.useCallback(() => {
+      submitComplaint();
+    }, []);
 
-  const handleClose = React.useCallback(() => {
-    setShowComplaintBox(false);
-  }, []);
+    const handleClose = React.useCallback(() => {
+      setShowComplaintBox(false);
+    }, []);
 
-  if (!showComplaintBox) return null;
+    if (!showComplaintBox) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full">
-        <h3 className="text-xl font-bold mb-4">Report Issue to Admin</h3>
-        
-        <textarea
-          ref={textareaRef}
-          value={complaintText}
-          onChange={handleTextChange}
-          placeholder="Describe your issue or complaint..."
-          className="w-full h-40 p-3 border rounded-lg mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
-          maxLength={500}
-          autoFocus
-        />
-        
-        <div className="flex justify-between text-sm text-gray-500 mb-6">
-          <div>Admin will review your complaint</div>
-          <div>{complaintText.length}/500</div>
-        </div>
-        
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            disabled={loadingComplaint}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loadingComplaint || !complaintText.trim()}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
-          >
-            {loadingComplaint ? "Sending..." : "Send to Admin"}
-          </button>
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 max-w-md w-full">
+          <h3 className="text-xl font-bold mb-4">Report Issue to Admin</h3>
+          
+          <textarea
+            ref={textareaRef}
+            value={complaintText}
+            onChange={handleTextChange}
+            placeholder="Describe your issue or complaint..."
+            className="w-full h-40 p-3 border rounded-lg mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+            maxLength={500}
+            autoFocus
+          />
+          
+          <div className="flex justify-between text-sm text-gray-500 mb-6">
+            <div>Admin will review your complaint</div>
+            <div>{complaintText.length}/500</div>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              disabled={loadingComplaint}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loadingComplaint || !complaintText.trim()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+            >
+              {loadingComplaint ? "Sending..." : "Send to Admin"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   // Complaints List Modal
   const ComplaintsListModal = () => (
@@ -622,7 +701,6 @@ const ComplaintModal = () => {
           <h2 className="mt-3 font-bold text-lg text-gray-800">{user?.fullname || "Farmer"}</h2>
           <p className="text-sm text-gray-500 mt-1">{user?.location || ""}</p>
           
-          {/* Complaints Summary */}
           
         </div>
 
@@ -661,8 +739,8 @@ const ComplaintModal = () => {
           >
             Messages
             {unreadCounts.messages > 0 && (
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                {unreadCounts.messages > 99 ? '99+' : unreadCounts.messages}
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                {unreadCounts.messages > 9 ? '9+' : unreadCounts.messages}
               </span>
             )}
           </Link>
@@ -678,6 +756,9 @@ const ComplaintModal = () => {
           </h1>
 
           <div className="flex items-center space-x-4">
+            {/* Quick Action Buttons */}
+            
+
             {/* View Complaints Button */}
             <button
               onClick={() => setShowComplaintsList(true)}
@@ -701,7 +782,7 @@ const ComplaintModal = () => {
               <Bell className="w-6 h-6 text-green-600" />
               {unreadCounts.notifications > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.notifications > 99 ? '99+' : unreadCounts.notifications}
+                  {unreadCounts.notifications > 9 ? '9+' : unreadCounts.notifications}
                 </span>
               )}
             </Link>
@@ -714,8 +795,8 @@ const ComplaintModal = () => {
             >
               <MessageCircle className="w-6 h-6 text-green-600" />
               {unreadCounts.messages > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.messages > 99 ? '99+' : unreadCounts.messages}
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                  {unreadCounts.messages > 9 ? '9+' : unreadCounts.messages}
                 </span>
               )}
             </Link>
@@ -801,10 +882,10 @@ const ComplaintModal = () => {
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
                 <div className="flex items-center justify-between mb-3">
                   <Bell className="w-8 h-8 text-purple-600" />
-                  <span className="text-sm text-gray-500">Alerts</span>
+                  <span className="text-sm text-gray-500">Unread Notifications</span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{stats.pendingNotifications}</h3>
-                <p className="text-sm text-gray-600 mt-1">Unread notifications</p>
+                <h3 className="text-2xl font-bold text-gray-800">{unreadCounts.notifications}</h3>
+                <p className="text-sm text-gray-600 mt-1">Pending notifications</p>
               </div>
             </div>
 

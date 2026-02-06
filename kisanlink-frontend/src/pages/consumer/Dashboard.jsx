@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { 
   ShoppingCart, 
@@ -10,7 +10,9 @@ import {
   CheckCircle, 
   XCircle,
   MessageSquare,
-  Trash2
+  Trash2,
+  Mail,
+  RefreshCw
 } from "lucide-react";
 
 const Dashboard = () => {
@@ -31,12 +33,19 @@ const Dashboard = () => {
     resolved: 0,
     dismissed: 0
   });
+  
+  // State for unread messages and notifications
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [refreshingMessages, setRefreshingMessages] = useState(false);
+  const [refreshingNotifications, setRefreshingNotifications] = useState(false);
+  const API_BASE_URL = "http://localhost:5001";
 
   // Fetch logged-in user
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch("http://localhost:5001/auth/me", { 
+        const res = await fetch(`${API_BASE_URL}/auth/me`, { 
           credentials: "include" 
         });
         if (!res.ok) throw new Error("User not authenticated");
@@ -50,19 +59,185 @@ const Dashboard = () => {
     fetchUser();
   }, []);
 
+  // Fetch unread messages count
+  const fetchUnreadMessages = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/messages/conversations`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        // Calculate total unread messages
+        const totalUnreadMessages = (data.conversations || []).reduce(
+          (total, conv) => total + (conv.unread_count || 0), 0
+        );
+        setUnreadMessages(totalUnreadMessages);
+      } else {
+        console.error("Failed to load conversations:", data.message);
+      }
+    } catch (err) {
+      console.error("Error fetching conversations:", err);
+    } finally {
+      setRefreshingMessages(false);
+    }
+  }, []);
+
+  // Fetch unread notifications count - IMPROVED VERSION
+  const fetchUnreadNotifications = useCallback(async () => {
+    try {
+      console.log("Fetching notifications count...");
+      
+      // Try multiple endpoints
+      const endpoints = [
+        `${API_BASE_URL}/notifications/unread-count`,
+        `${API_BASE_URL}/notifications/`
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log("Notifications data:", data);
+            
+            if (data.success || data.status === "success") {
+              if (data.count !== undefined) {
+                // Direct count from unread-count endpoint
+                setUnreadNotifications(data.count || 0);
+                return;
+              } else if (data.notifications) {
+                // Calculate from notifications array
+                const unreadCount = data.notifications.filter(
+                  notification => !notification.is_read
+                ).length;
+                setUnreadNotifications(unreadCount);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.log(`Endpoint ${endpoint} failed:`, err.message);
+        }
+      }
+      
+      // If all endpoints fail, set to 0
+      setUnreadNotifications(0);
+      
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+      setUnreadNotifications(0);
+    } finally {
+      setRefreshingNotifications(false);
+    }
+  }, []);
+
+  // Combined refresh function
+  const refreshDashboardData = useCallback(() => {
+    if (user) {
+      fetchUnreadMessages();
+      fetchUnreadNotifications();
+      fetchCart();
+      fetchComplaintStats();
+    }
+  }, [user, fetchUnreadMessages, fetchUnreadNotifications]);
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    if (!user) return;
+    
+    refreshDashboardData(); // Initial fetch
+    
+    const interval = setInterval(() => {
+      refreshDashboardData();
+    }, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [user, refreshDashboardData]);
+
+  // Refresh when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user && !refreshingMessages && !refreshingNotifications) {
+        refreshDashboardData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, refreshingMessages, refreshingNotifications, refreshDashboardData]);
+
+  // Listen for messages-marked-read events from Chat component
+  useEffect(() => {
+    const handleMessagesMarkedRead = () => {
+      // Refresh unread messages count
+      fetchUnreadMessages();
+    };
+
+    window.addEventListener('messages-marked-read', handleMessagesMarkedRead);
+    
+    return () => {
+      window.removeEventListener('messages-marked-read', handleMessagesMarkedRead);
+    };
+  }, [fetchUnreadMessages]);
+
+  // Listen for notifications-marked-read events
+  useEffect(() => {
+    const handleNotificationsMarkedRead = () => {
+      // Refresh unread notifications count
+      fetchUnreadNotifications();
+    };
+
+    window.addEventListener('notifications-marked-read', handleNotificationsMarkedRead);
+    
+    return () => {
+      window.removeEventListener('notifications-marked-read', handleNotificationsMarkedRead);
+    };
+  }, [fetchUnreadNotifications]);
+
   // Fetch user complaints
   const fetchUserComplaints = async () => {
     if (!user) return;
     setComplaintsLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/complaints/my-complaints", {
+      const response = await fetch(`${API_BASE_URL}/complaints/my-complaints`, {
         credentials: "include",
       });
       
       const data = await response.json();
       
       if (response.ok && data.success) {
-        setUserComplaints(data.complaints);
+        setUserComplaints(data.complaints || []);
+        
+        // Calculate stats from complaints
+        const stats = {
+          total: data.complaints?.length || 0,
+          pending: data.complaints?.filter(c => c.status === 'pending').length || 0,
+          resolved: data.complaints?.filter(c => c.status === 'resolved').length || 0,
+          dismissed: data.complaints?.filter(c => c.status === 'dismissed').length || 0
+        };
+        setComplaintStats(stats);
       } else {
         console.error("Failed to fetch complaints:", data.error);
         setUserComplaints([]);
@@ -79,7 +254,7 @@ const Dashboard = () => {
   const fetchComplaintStats = async () => {
     if (!user) return;
     try {
-      const response = await fetch("http://localhost:5001/complaints/stats", {
+      const response = await fetch(`${API_BASE_URL}/complaints/stats`, {
         credentials: "include",
       });
       
@@ -97,7 +272,7 @@ const Dashboard = () => {
   const fetchCart = async () => {
     if (!user) return;
     try {
-      const res = await fetch("http://localhost:5001/cart/", { 
+      const res = await fetch(`${API_BASE_URL}/cart/`, { 
         credentials: "include" 
       });
       if (!res.ok) throw new Error("Failed to fetch cart");
@@ -114,6 +289,7 @@ const Dashboard = () => {
       fetchCart();
       fetchUserComplaints();
       fetchComplaintStats();
+      fetchUnreadNotifications(); // Initial fetch
     }
   }, [user]);
 
@@ -126,7 +302,7 @@ const Dashboard = () => {
 
     setLoadingComplaint(true);
     try {
-      const response = await fetch("http://localhost:5001/complaints/submit", {
+      const response = await fetch(`${API_BASE_URL}/complaints/submit`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -136,11 +312,13 @@ const Dashboard = () => {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        alert("✅ Complaint sent to admin!");
+        setToast("✅ Complaint sent to admin!");
         setComplaintText("");
         setShowComplaintBox(false);
         fetchUserComplaints(); // Refresh complaints list
         fetchComplaintStats(); // Refresh stats
+        
+        setTimeout(() => setToast(""), 3000);
       } else {
         alert(data.error || "Failed to submit complaint");
       }
@@ -155,7 +333,7 @@ const Dashboard = () => {
   // Add to cart
   const addToCart = async (product, quantity = 1) => {
     try {
-      const res = await fetch("http://localhost:5001/cart/", {
+      const res = await fetch(`${API_BASE_URL}/cart/`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -182,7 +360,7 @@ const Dashboard = () => {
 
     const fetchProducts = async () => {
       try {
-        const res = await fetch("http://localhost:5001/products/farmer-items", {
+        const res = await fetch(`${API_BASE_URL}/products/farmer-items`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to fetch products");
@@ -263,56 +441,112 @@ const Dashboard = () => {
     }
   };
 
-  // Complaint Modal Component
+  // Complaint Modal Component - NEW APPROACH
   const ComplaintModal = () => {
-  // Add ref and useEffect
-  const textareaRef = React.useRef(null);
-  
-  React.useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, []);
+    const textareaRef = React.useRef(null);
+    const [localComplaintText, setLocalComplaintText] = useState(complaintText);
+    
+    // Initialize text direction fix
+    React.useEffect(() => {
+      if (textareaRef.current) {
+        // Apply nuclear text direction fix
+        const textarea = textareaRef.current;
+        
+        // Remove any RTL classes
+        textarea.classList.remove('rtl', 'text-right');
+        textarea.classList.add('ltr', 'text-left');
+        
+        // Set all direction attributes
+        textarea.setAttribute('dir', 'ltr');
+        textarea.style.direction = 'ltr';
+        textarea.style.textAlign = 'left';
+        textarea.style.textAlignLast = 'left';
+        textarea.style.unicodeBidi = 'plaintext';
+        textarea.style.unicodeBidi = 'isolate';
+        
+        // Focus at the end
+        textarea.focus();
+        textarea.setSelectionRange(localComplaintText.length, localComplaintText.length);
+        
+        // Force direction on every interaction
+        const forceLTR = () => {
+          textarea.style.direction = 'ltr';
+          textarea.style.textAlign = 'left';
+        };
+        
+        const events = ['input', 'keydown', 'keyup', 'click', 'focus', 'blur'];
+        events.forEach(event => {
+          textarea.addEventListener(event, forceLTR);
+        });
+        
+        return () => {
+          events.forEach(event => {
+            textarea.removeEventListener(event, forceLTR);
+          });
+        };
+      }
+    }, []);
+    
+    const handleTextChange = (e) => {
+      const value = e.target.value;
+      setLocalComplaintText(value);
+      setComplaintText(value);
+      
+      // Force LTR after every change
+      e.target.style.direction = 'ltr';
+      e.target.style.textAlign = 'left';
+    };
+    
+    const handleSubmit = () => {
+      setComplaintText(localComplaintText);
+      submitComplaint();
+    };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full">
-        <h3 className="text-xl font-bold mb-4">Report Issue to Admin</h3>
-        
-        <textarea
-          ref={textareaRef}
-          value={complaintText}
-          onChange={(e) => setComplaintText(e.target.value)}
-          placeholder="Describe your issue or complaint..."
-          className="w-full h-40 p-3 border rounded-lg mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
-          maxLength={500}
-        />
-        
-        <div className="flex justify-between text-sm text-gray-500 mb-6">
-          <div>Admin will review your complaint</div>
-          <div>{complaintText.length}/500</div>
-        </div>
-        
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={() => setShowComplaintBox(false)}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            disabled={loadingComplaint}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submitComplaint}
-            disabled={loadingComplaint || !complaintText.trim()}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
-          >
-            {loadingComplaint ? "Sending..." : "Send to Admin"}
-          </button>
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 max-w-md w-full" style={{ direction: 'ltr' }}>
+          <h3 className="text-xl font-bold mb-4" style={{ textAlign: 'left' }}>Report Issue to Admin</h3>
+          
+          <textarea
+            ref={textareaRef}
+            value={localComplaintText}
+            onChange={handleTextChange}
+            placeholder="Describe your issue or complaint..."
+            className="w-full h-40 p-3 border rounded-lg mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+            maxLength={500}
+            dir="ltr"
+            data-direction="ltr"
+          />
+          
+          <div className="flex justify-between text-sm text-gray-500 mb-6" style={{ textAlign: 'left' }}>
+            <div>Admin will review your complaint</div>
+            <div>{localComplaintText.length}/500</div>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowComplaintBox(false);
+                setLocalComplaintText("");
+              }}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              disabled={loadingComplaint}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loadingComplaint || !localComplaintText.trim()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+            >
+              {loadingComplaint ? "Sending..." : "Send to Admin"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
+
   // Complaints List Modal
   const ComplaintsListModal = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -396,16 +630,16 @@ const Dashboard = () => {
                       <div className="flex items-center gap-2 mb-2">
                         {getStatusIcon(complaint.status)}
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(complaint.status)}`}>
-                          {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+                          {complaint.status?.charAt(0)?.toUpperCase() + complaint.status?.slice(1) || 'Pending'}
                         </span>
                         <span className="text-xs text-gray-500">
                           ID: #{complaint.id}
                         </span>
                         <span className="text-xs text-gray-500">
-                          • {complaint.created_at}
+                          • {complaint.created_at || 'Recently'}
                         </span>
                       </div>
-                      <p className="text-gray-700 mb-2">{complaint.complaint_text}</p>
+                      <p className="text-gray-700 mb-2 whitespace-pre-wrap">{complaint.complaint_text}</p>
                       
                       {/* Admin Reply Section */}
                       {complaint.admin_reply && (
@@ -414,7 +648,7 @@ const Dashboard = () => {
                             <MessageSquare className="w-4 h-4 text-blue-600" />
                             <span className="text-sm font-medium text-blue-700">Admin Response:</span>
                           </div>
-                          <p className="text-sm text-gray-800">{complaint.admin_reply}</p>
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap">{complaint.admin_reply}</p>
                           {complaint.updated_at && (
                             <p className="text-xs text-gray-500 mt-1">
                               Updated: {complaint.updated_at}
@@ -433,6 +667,48 @@ const Dashboard = () => {
     </div>
   );
 
+  // Handle manual refresh
+  const handleManualRefresh = () => {
+    setRefreshingMessages(true);
+    setRefreshingNotifications(true);
+    refreshDashboardData();
+    setTimeout(() => {
+      setRefreshingMessages(false);
+      setRefreshingNotifications(false);
+    }, 1000);
+  };
+
+  // Add CSS injection for text direction fix
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      /* Force LTR for all inputs */
+      textarea, input[type="text"], input[type="search"] {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: plaintext !important;
+      }
+      
+      /* Specifically target complaint textarea */
+      textarea[maxlength="500"] {
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: plaintext !important;
+      }
+      
+      /* Force LTR globally */
+      .ltr-force {
+        direction: ltr !important;
+        text-align: left !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen flex bg-gray-100">
       {/* Sidebar */}
@@ -444,8 +720,8 @@ const Dashboard = () => {
           <h2 className="mt-4 text-xl font-bold text-gray-800">{user?.fullname || "Consumer"}</h2>
           <p className="text-gray-500">{user?.email}</p>
           <p className="text-gray-400 text-sm mt-1">Location: {user?.location}</p>
-          <p className="text-gray-500 text-sm mt-2">Cart Items: {cart.length}</p>
           
+          {/* Stats in Sidebar */}
           
         </div>
 
@@ -483,16 +759,26 @@ const Dashboard = () => {
 
           <Link
             to="/consumer/notifications"
-            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition"
+            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition flex items-center justify-between"
           >
-            Notifications
+            <span>Notifications</span>
+            {unreadNotifications > 0 && (
+              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
           </Link>
 
           <Link
             to="/consumer/messages"
-            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition"
+            className="block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 hover:shadow-md transition flex items-center justify-between"
           >
-            Messages
+            <span>Messages</span>
+            {unreadMessages > 0 && (
+              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full">
+                {unreadMessages > 9 ? '9+' : unreadMessages}
+              </span>
+            )}
           </Link>
         </nav>
       </aside>
@@ -525,9 +811,6 @@ const Dashboard = () => {
           {/* Left side: logo + notifications */}
           <div className="flex items-center space-x-4">
             <div className="text-2xl font-bold text-green-600">KisanLink</div>
-            <Link to="/consumer/notifications" className="relative">
-              <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
-            </Link>
           </div>
 
           {/* Search */}
@@ -538,6 +821,8 @@ const Dashboard = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              dir="ltr"
+              style={{ direction: 'ltr', textAlign: 'left' }}
             />
           </div>
 
@@ -566,13 +851,27 @@ const Dashboard = () => {
               )}
             </Link>
 
-            <Link to="/consumer/messages">
+            <Link to="/consumer/notifications" className="relative">
+              <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
+              {unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-2 bg-red-600 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </span>
+              )}
+            </Link>
+
+            <Link to="/consumer/messages" className="relative">
               <MessageCircle className="w-6 h-6 text-gray-700 cursor-pointer" />
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-2 bg-red-600 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
+                  {unreadMessages > 9 ? '9+' : unreadMessages}
+                </span>
+              )}
             </Link>
 
             <button
               onClick={async () => {
-                await fetch("http://localhost:5001/auth/logout", {
+                await fetch(`${API_BASE_URL}/auth/logout`, {
                   method: "POST",
                   credentials: "include",
                 });
@@ -586,7 +885,14 @@ const Dashboard = () => {
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Available Products Near You</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Available Products Near You</h2>
+            
+            {/* Quick Action Buttons */}
+            
+          </div>
+
+          
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredProducts.filter((p) => p.available_stock > 5).length === 0 ? (
@@ -671,7 +977,7 @@ const ProductCard = ({ product, addToCart }) => {
         </div>
         
         <Link
-          to={`/consumer/messages/${product.farmer_id}`}
+          to={`/consumer/chat/${product.farmer_id}`}
           className="text-green-600 text-sm font-semibold hover:underline mt-2 block flex items-center gap-1"
         >
           <MessageCircle className="w-3 h-3" />

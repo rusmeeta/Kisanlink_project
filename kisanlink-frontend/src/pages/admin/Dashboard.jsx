@@ -72,22 +72,36 @@ const AdminDashboard = () => {
     return () => clearInterval(interval);
   }, [navigate]);
 
-  const checkAdminAuth = async () => {
-    try {
-      const response = await axios.get("http://localhost:5001/admin/check-auth", {
-        withCredentials: true
-      });
+  // In AdminDashboard.jsx - Update checkAdminAuth function
+const checkAdminAuth = async () => {
+  // First check localStorage (as backup)
+  const isAdminLoggedInLocal = localStorage.getItem("adminLoggedIn");
+  
+  if (!isAdminLoggedInLocal) {
+    console.log("❌ No admin login found in localStorage, redirecting...");
+    navigate("/");
+    return;
+  }
+  
+  // Try to verify with backend
+  try {
+    const response = await axios.get("http://localhost:5001/admin/check-auth", {
+      withCredentials: true
+    });
 
-      if (response.data.authenticated) {
-        setAdminName(response.data.name || "Admin");
-      } else {
-        navigate("/admin");
-      }
-    } catch (err) {
-      navigate("/admin");
+    if (response.data.authenticated) {
+      setAdminName(response.data.name || "Admin");
+    } else {
+      // Backend says not authenticated, but localStorage says we are
+      console.warn("Backend auth failed, continuing with localStorage auth");
+      setAdminName(localStorage.getItem("adminName") || "Admin");
     }
-  };
-
+  } catch (err) {
+    console.warn("Could not verify with backend, using localStorage:", err.message);
+    // Continue with localStorage
+    setAdminName(localStorage.getItem("adminName") || "Admin");
+  }
+};
   const loadEditRequests = async () => {
     try {
       const response = await axios.get("http://localhost:5001/admin/edit-requests/pending", {

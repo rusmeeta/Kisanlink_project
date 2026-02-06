@@ -1,27 +1,35 @@
-// src/pages/farmer/Notifications.jsx - SIMPLE VERSION
+// src/pages/farmer/Notifications.jsx - COMPLETE FIXED VERSION
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, RefreshCw, ArrowLeft, MessageCircle, ShoppingCart } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Bell, RefreshCw, ArrowLeft, MessageCircle, ShoppingCart, Check } from 'lucide-react';
 
 const FarmerNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isMarkingRead, setIsMarkingRead] = useState(false);
+  const navigate = useNavigate();
 
-  // Load notifications
+  // Load notifications - SORTED BY LATEST FIRST
   const loadNotifications = async () => {
     try {
       setLoading(true);
       setError('');
       
       const response = await fetch('http://localhost:5001/notifications', {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store'
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Loaded notifications:', data);
+        
         if (data.status === 'success') {
-          setNotifications(data.notifications || []);
+          // Sort notifications by created_at in descending order (newest first)
+          const sortedNotifications = (data.notifications || [])
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          setNotifications(sortedNotifications);
         } else {
           setError(data.message || 'Failed to load notifications');
         }
@@ -36,84 +44,134 @@ const FarmerNotifications = () => {
     }
   };
 
-  // Mark notification as read
-  const markAsRead = async (notificationId) => {
+  // Mark notification as read and update state - FIXED VERSION
+  const markNotificationAsRead = async (notificationId) => {
+    if (isMarkingRead) return;
+    
+    setIsMarkingRead(true);
+    
     try {
-      await fetch(`http://localhost:5001/notifications/${notificationId}/read`, {
+      // Update local state FIRST for immediate UI feedback
+      setNotifications(prevNotifications =>
+        prevNotifications.map(notif =>
+          notif.id === notificationId ? { ...notif, is_read: true } : notif
+        )
+      );
+      
+      // Then send API request
+      const response = await fetch(`http://localhost:5001/notifications/${notificationId}/read`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
+      
+      const result = await response.json();
+      console.log('Mark as read response:', result);
+      
+      if (!response.ok || result.status !== 'success') {
+        console.error('Failed to mark notification as read on server:', result.message);
+        // Reload notifications to sync with server if failed
+        loadNotifications();
+      }
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      // Reload on error
+      loadNotifications();
+    } finally {
+      setIsMarkingRead(false);
     }
   };
 
-  // Handle notification click
-  // In Notifications.jsx, update the handleNotificationClick function:
-
-const handleNotificationClick = async (notification) => {
-  // Mark as read
-  if (!notification.is_read && notification.id) {
-    await fetch(`http://localhost:5001/notifications/${notification.id}/read`, {
-      method: 'POST',
-      credentials: 'include'
-    });
-  }
-  
-  // Check if this is an order notification
-  const message = notification.message.toLowerCase();
-  if (message.includes('ordered') || message.includes('order placed')) {
-    // Try to get consumer ID
-    let consumerId = notification.consumer_id;
+  // Handle notification click - FIXED VERSION
+  const handleNotificationClick = async (notification) => {
+    console.log('Clicked notification:', notification);
     
-    // If consumer_id is not in notification, try to parse from order
-    if (!consumerId && notification.order_id) {
-      try {
-        // Fetch order to get consumer_id
-        const res = await fetch(`http://localhost:5001/orders/${notification.order_id}`, {
-          credentials: 'include'
-        });
-        if (res.ok) {
-          const orderData = await res.json();
-          consumerId = orderData.consumer_id;
-        }
-      } catch (err) {
-        console.error('Error fetching order:', err);
+    // Mark as read if unread
+    if (!notification.is_read && notification.id) {
+      console.log('Marking as read:', notification.id);
+      await markNotificationAsRead(notification.id);
+    }
+    
+    // Check if this is an order notification
+    const message = notification.message?.toLowerCase() || '';
+    const isOrderNotification = message.includes('ordered') || message.includes('order placed');
+    
+    if (isOrderNotification) {
+      // USE chat_with_id FROM BACKEND RESPONSE
+      const chatWithId = notification.chat_with_id;
+      
+      console.log('Chat with ID:', chatWithId);
+      
+      if (chatWithId) {
+        // Small delay to ensure read status is saved before navigation
+        setTimeout(() => {
+          navigate(`/farmer/chat/${chatWithId}`);
+        }, 300);
+        return;
       }
     }
     
-    if (consumerId) {
-      // Open chat with consumer
-      window.location.href = `/farmer/chat/${consumerId}`;
-      return;
-    }
-  }
-  
-  // If no consumer ID or not an order notification, go to messages page
-  window.location.href = '/farmer/messages';
-};
+    // If no chat ID or not an order notification, just mark as read
+    // and stay on the notifications page
+    console.log('Non-order notification clicked, staying on page');
+  };
 
   // Format time ago
   const formatTimeAgo = (dateString) => {
     if (!dateString) return "Just now";
-    const date = new Date(dateString+'Z');
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    
+    try {
+      let date;
+      if (dateString.includes('Z')) {
+        date = new Date(dateString);
+      } else if (dateString.includes('+')) {
+        date = new Date(dateString);
+      } else {
+        date = new Date(dateString + 'Z');
+      }
+      
+      if (isNaN(date.getTime())) {
+        return "Recently";
+      }
+      
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.round(diffMs / 60000);
+      const diffHours = Math.round(diffMs / 3600000);
+      const diffDays = Math.round(diffMs / 86400000);
 
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+      if (diffMins < 1) return "Just now";
+      if (diffMins === 1) return "1 min ago";
+      if (diffMins < 60) return `${diffMins} min ago`;
+      if (diffHours === 1) return "1 hour ago";
+      if (diffHours < 24) return `${diffHours} hours ago`;
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays} days ago`;
+      
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (e) {
+      return "Recently";
+    }
   };
+
+  // Count unread notifications
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
     loadNotifications();
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  // Add effect to log notifications when they change
+  useEffect(() => {
+    console.log('Notifications updated, count:', notifications.length);
+    console.log('Unread count:', unreadCount);
+  }, [notifications, unreadCount]);
 
   if (loading) {
     return (
@@ -156,8 +214,9 @@ const handleNotificationClick = async (notification) => {
               <button
                 onClick={loadNotifications}
                 className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                disabled={loading}
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
               <Link
@@ -180,14 +239,19 @@ const handleNotificationClick = async (notification) => {
             <p className="text-sm text-gray-500">Total</p>
             <p className="text-2xl font-bold text-gray-800">{notifications.length}</p>
           </div>
-          <div className="bg-blue-50 rounded-lg shadow-sm p-4">
-            <p className="text-sm text-blue-600">Unread</p>
-            <p className="text-2xl font-bold text-blue-600">{unreadCount}</p>
+          <div className={`rounded-lg shadow-sm p-4 transition-colors duration-300 ${unreadCount > 0 ? 'bg-blue-50' : 'bg-gray-50'}`}>
+            <p className={`text-sm ${unreadCount > 0 ? 'text-blue-600' : 'text-gray-500'}`}>Unread</p>
+            <p className={`text-2xl font-bold ${unreadCount > 0 ? 'text-blue-600' : 'text-gray-800'}`}>
+              {unreadCount}
+            </p>
           </div>
           <div className="bg-green-50 rounded-lg shadow-sm p-4">
             <p className="text-sm text-green-600">Orders</p>
             <p className="text-2xl font-bold text-gray-800">
-              {notifications.filter(n => n.message?.toLowerCase().includes('ordered')).length}
+              {notifications.filter(n => 
+                n.message?.toLowerCase().includes('ordered') || 
+                n.message?.toLowerCase().includes('order placed')
+              ).length}
             </p>
           </div>
         </div>
@@ -228,54 +292,83 @@ const handleNotificationClick = async (notification) => {
                 </h2>
               </div>
               
-              {/* SIMPLE NOTIFICATION LIST - All clickable */}
-              {notifications.map((notification, index) => (
-                <div
-                  key={notification.id || index}
-                  className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 cursor-pointer ${
-                    !notification.is_read ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => handleNotificationClick(notification)}
-                >
-                  <div className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="text-gray-800">{notification.message}</p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {formatTimeAgo(notification.created_at)}
-                        </p>
-                        
-                        {/* Show if it's an order notification */}
-                        {notification.message.toLowerCase().includes('ordered') && (
-                          <div className="mt-2 inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                            <ShoppingCart className="w-3 h-3 mr-1" />
-                            Order Notification - Click to chat
+              {/* NOTIFICATION LIST */}
+              {notifications.map((notification, index) => {
+                const isOrderNotification = notification.message?.toLowerCase().includes('ordered') || 
+                                          notification.message?.toLowerCase().includes('order placed');
+                
+                return (
+                  <div
+                    key={notification.id || index}
+                    className={`border-b border-gray-100 transition-all duration-200 cursor-pointer ${
+                      !notification.is_read 
+                        ? 'bg-blue-50 hover:bg-blue-100' 
+                        : 'hover:bg-gray-50'
+                    } ${isMarkingRead ? 'opacity-70' : ''}`}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <div className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-start">
+                            <p className="text-gray-800 flex-1">{notification.message}</p>
+                            {isMarkingRead && (
+                              <div className="ml-2 animate-spin">
+                                <RefreshCw className="w-4 h-4 text-green-600" />
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <p className="text-sm text-gray-500 mt-1">
+                            {formatTimeAgo(notification.created_at)}
+                          </p>
+                          
+                          {/* Show if it's an order notification */}
+                          {isOrderNotification && (
+                            <div className="mt-2 inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                              <ShoppingCart className="w-3 h-3 mr-1" />
+                              {notification.chat_with_name 
+                                ? `Order from ${notification.chat_with_name} - Click to chat`
+                                : 'Order Notification - Click to chat'}
+                            </div>
+                          )}
+                          
+                          {/* Debug info - remove in production */}
+                          
+                        </div>
+                        
+                        <div className="flex flex-col items-end space-y-1 ml-2">
+                          {!notification.is_read ? (
+                            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full transition-colors duration-300 flex items-center">
+                              <span className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span>
+                              New
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-500 px-2 py-1 transition-colors duration-300 flex items-center">
+                              <Check className="w-3 h-3 mr-1 text-green-500" />
+                              Read
+                            </span>
+                          )}
+                          
+                          {/* Visual indicator */}
+                          <div className={`w-3 h-3 rounded-full border ${
+                            notification.is_read 
+                              ? 'bg-gray-100 border-gray-300' 
+                              : 'bg-green-500 border-green-600 animate-pulse'
+                          }`}></div>
+                        </div>
                       </div>
-                      
-                      {!notification.is_read && (
-                        <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                          New
-                        </span>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Simple Instructions */}
-        <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-          <h3 className="text-sm font-medium text-green-800 mb-2">How to use:</h3>
-          <ul className="text-sm text-green-600 space-y-1">
-            <li>• Click any order notification to chat with the customer</li>
-            <li>• Click other notifications to view messages</li>
-            <li>• New notifications have a blue background</li>
-          </ul>
-        </div>
+       
+
+        
+        
       </div>
     </div>
   );
