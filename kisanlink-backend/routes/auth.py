@@ -12,7 +12,6 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 # Import email service
 from utils.email_service import email_service
 
-# Location coordinates
 location_coords = {
     "Naya Thimi": (27.6943, 85.3347),
     "Gatthaghar": (27.6739136, 85.3739132),

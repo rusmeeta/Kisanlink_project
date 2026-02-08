@@ -444,23 +444,7 @@ const ConsumerNotifications = () => {
           )}
         </div>
 
-        {/* Debug info */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-800 mb-2">Debug Info:</h3>
-            <div className="text-xs text-gray-600">
-              <p>• Total notifications: {notifications.length}</p>
-              <p>• Unread count: {unreadCount}</p>
-              <p>• Is marking read: {isMarkingRead ? 'Yes' : 'No'}</p>
-              <button 
-                onClick={() => console.log('All notifications:', notifications)}
-                className="mt-2 px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded"
-              >
-                Log to Console
-              </button>
-            </div>
-          </div>
-        )}
+        
 
         {/* Simple Instructions */}
         
