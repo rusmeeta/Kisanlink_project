@@ -43,6 +43,7 @@ class Order(db.Model):
 
 class OrderItem(db.Model):
     __tablename__ = "order_items"
+    __table_args__ = {'extend_existing': True} 
 
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer)
@@ -52,6 +53,7 @@ class OrderItem(db.Model):
 
 class Message(db.Model):
     __tablename__ = "messages"
+    __table_args__ = {'extend_existing': True} 
 
     id = db.Column(db.Integer, primary_key=True)
     sender_id = db.Column(db.Integer)
@@ -62,6 +64,7 @@ class Message(db.Model):
 
 class Notification(db.Model):
     __tablename__ = "notifications"
+    __table_args__ = {'extend_existing': True} 
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer)
