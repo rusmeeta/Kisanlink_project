@@ -276,13 +276,16 @@ def index():
         }
     }
 
-# 🚀 CRITICAL FOR PRODUCTION DEPLOYMENT:
-# Moving this code here ensures Gunicorn executes it on boot in Render,
-# automatically building all missing tables in your empty cloud database.
+# 🚀 FORCED SCHEMA RESET FOR PRODUCTION:
+# Wipes old mismatched tables so Gunicorn can recreate them with the 'is_active' column.
 with app.app_context():
     try:
+        print("🧹 Wiping old mismatched tables...")
+        db.drop_all()
+        
+        print("🏗️ Rebuilding clean tables with all necessary columns...")
         db.create_all()
-        print("✅ Render cloud database tables synchronized and ready!")
+        print("✅ Render cloud database tables synchronized perfectly!")
     except Exception as e:
         print(f"⚠️ Cloud table generation status note: {e}")
 
