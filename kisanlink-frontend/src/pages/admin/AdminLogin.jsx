@@ -13,7 +13,6 @@ const AdminLogin = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
     if (!email || !password) {
       setError('Please enter both email and password');
       return;
@@ -32,19 +31,15 @@ const AdminLogin = () => {
       const data = await response.json();
 
       if (response.ok && data.access_token) {
-        // Store JWT token and admin info
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('adminLoggedIn', 'true');
         localStorage.setItem('adminName', data.user?.fullname || 'Admin');
         localStorage.setItem('adminEmail', email);
-
-        console.log('✅ Login successful:', data);
         navigate('/admin/dashboard');
       } else {
         setError(data.error || 'Invalid admin credentials');
       }
     } catch (err) {
-      console.error('❌ Login error:', err);
       setError('Network error. Please check your connection.');
     } finally {
       setLoading(false);
@@ -54,7 +49,6 @@ const AdminLogin = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        {/* Logo & Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <div className="h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center">
@@ -65,7 +59,6 @@ const AdminLogin = () => {
           <p className="text-gray-600">Secure login for administrators only</p>
         </div>
 
-        {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">
             Administrator Login
@@ -112,13 +105,8 @@ const AdminLogin = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  disabled={loading}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
@@ -126,7 +114,7 @@ const AdminLogin = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50"
             >
               {loading ? (
                 <div className="flex items-center justify-center">
@@ -139,24 +127,17 @@ const AdminLogin = () => {
             </button>
           </form>
 
-          {/* Security Note */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center text-sm text-gray-500">
               <Shield className="h-4 w-4 mr-2 flex-shrink-0" />
-              <p>
-                This area is restricted to authorized personnel only. All activities are logged.
-              </p>
+              <p>This area is restricted to authorized personnel only.</p>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-600">
             Having trouble? Contact system administrator
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            © {new Date().getFullYear()} Kisanlink Admin Portal
           </p>
         </div>
       </div>
