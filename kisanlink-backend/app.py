@@ -44,6 +44,10 @@ from routes.simple_messages import simple_bp
 from routes.admin import admin_bp
 from routes.complaints import complaints_bp
 
+
+
+app.url_map.strict_slashes = False
+
 # ------------------------------
 # INIT FLASK APP
 # ------------------------------
