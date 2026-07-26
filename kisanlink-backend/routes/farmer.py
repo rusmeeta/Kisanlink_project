@@ -1,22 +1,19 @@
+# routes/farmer.py – JWT protected version
 import os
-from flask import Blueprint, request, jsonify, send_from_directory, session
+from flask import Blueprint, request, jsonify, send_from_directory
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from db import get_db_connection
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Create a Flask blueprint for farmer-related routes
 farmer_bp = Blueprint("farmer", __name__)
 
-# Directory where uploaded product images will be stored
 UPLOAD_FOLDER = "uploads"
-# Allowed file extensions for uploaded images
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
 
-# Create the uploads folder if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# Mapping human-readable location names to latitude/longitude
 location_coords = {
     "Naya Thimi": (27.6943, 85.3347),
     "Gatthaghar": (27.6739136, 85.3739132),
@@ -24,20 +21,16 @@ location_coords = {
     "Lokanthali": (27.6740, 85.3450),
 }
 
-# Helper function to check if uploaded file has allowed extension
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Helper function to calculate time ago
 def get_time_ago(date_string):
     if not date_string:
         return "Just now"
-    
     try:
         date = datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
         now = datetime.now()
         diff = now - date
-        
         if diff.days > 0:
             return f"{diff.days}d ago"
         elif diff.seconds // 3600 > 0:
@@ -49,40 +42,28 @@ def get_time_ago(date_string):
     except:
         return ""
 
-# Serve uploaded images from the server
 @farmer_bp.route("/uploads/<filename>")
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 # ==================== DASHBOARD ENDPOINTS ====================
 
-# ------------------ Farmer Info ------------------
 @farmer_bp.route("/me", methods=["GET"])
+@jwt_required()
 def get_farmer_info():
-    """
-    Get the currently logged-in farmer's details
-    """
     try:
-        farmer_id = session.get("user_id")  # Get user ID from session
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        # Fetch farmer details from users table
         cur.execute("""
             SELECT id, fullname, email, location, latitude, longitude, user_type, last_login
-            FROM users
-            WHERE id=%s
+            FROM users WHERE id=%s
         """, (farmer_id,))
         row = cur.fetchone()
         cur.close()
         conn.close()
-
         if not row:
             return jsonify({"error": "Farmer not found"}), 404
-
-        # Convert row to dict
         farmer = {
             "id": row[0],
             "fullname": row[1],
@@ -93,71 +74,37 @@ def get_farmer_info():
             "user_type": row[6],
             "last_login": row[7].strftime("%Y-%m-%d %H:%M:%S") if row[7] else None
         }
-
         return jsonify(farmer), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Complete Dashboard Stats ------------------
 @farmer_bp.route("/stats", methods=["GET"])
+@jwt_required()
 def get_farmer_stats():
-    """
-    Get complete stats for farmer dashboard
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # 1. Total products count
         cur.execute("SELECT COUNT(*) FROM farmer_items WHERE farmer_id=%s", (farmer_id,))
         total_products = cur.fetchone()[0]
-        
-        # 2. Total orders count
         cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
         total_orders = cur.fetchone()[0]
-        
-        # 3. Total revenue (sum of all orders)
         cur.execute("SELECT COALESCE(SUM(total_price), 0) FROM orders WHERE farmer_id=%s", (farmer_id,))
         total_revenue = float(cur.fetchone()[0])
-        
-        # 4. Unique customers count
-        cur.execute("""
-            SELECT COUNT(DISTINCT consumer_id) 
-            FROM orders 
-            WHERE farmer_id=%s
-        """, (farmer_id,))
+        cur.execute("SELECT COUNT(DISTINCT consumer_id) FROM orders WHERE farmer_id=%s", (farmer_id,))
         unique_customers = cur.fetchone()[0]
-        
-        # 5. Pending orders count
         cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s AND status='pending'", (farmer_id,))
         pending_orders = cur.fetchone()[0]
-        
-        # 6. Today's orders
         today = datetime.now().strftime("%Y-%m-%d")
-        cur.execute("""
-            SELECT COUNT(*) 
-            FROM orders 
-            WHERE farmer_id=%s AND DATE(order_date)=%s
-        """, (farmer_id, today))
+        cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s AND DATE(order_date)=%s", (farmer_id, today))
         today_orders = cur.fetchone()[0]
-        
-        # 7. Average order value
         avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
-        
-        # 8. Completion rate (completed orders / total orders)
         cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s AND status='completed'", (farmer_id,))
         completed_orders = cur.fetchone()[0]
         completion_rate = (completed_orders / total_orders * 100) if total_orders > 0 else 0
-        
         cur.close()
         conn.close()
-        
         stats = {
             "total_products": total_products,
             "total_orders": total_orders,
@@ -167,30 +114,20 @@ def get_farmer_stats():
             "today_orders": today_orders,
             "avg_order_value": round(avg_order_value, 2),
             "completion_rate": round(completion_rate, 1),
-            "pending_notifications": 0  # Will be set from notifications endpoint
+            "pending_notifications": 0
         }
-        
         return jsonify({"status": "success", "stats": stats}), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Recent Orders ------------------
 @farmer_bp.route("/orders/recent", methods=["GET"])
+@jwt_required()
 def get_recent_orders():
-    """
-    Get recent orders for dashboard
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Get last 10 orders
         cur.execute("""
             SELECT o.id, o.consumer_id, o.item_id, o.quantity, o.total_price, 
                    o.status, o.order_date, u.fullname as consumer_name,
@@ -202,11 +139,9 @@ def get_recent_orders():
             ORDER BY o.order_date DESC
             LIMIT 10
         """, (farmer_id,))
-        
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        
         orders = []
         for row in rows:
             orders.append({
@@ -221,94 +156,54 @@ def get_recent_orders():
                 "product_name": row[8] or f"Product {row[2]}",
                 "time_ago": get_time_ago(row[6].strftime("%Y-%m-%d %H:%M:%S") if row[6] else "")
             })
-        
         return jsonify({"status": "success", "orders": orders, "count": len(orders)}), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Orders Count ------------------
 @farmer_bp.route("/orders/count", methods=["GET"])
+@jwt_required()
 def get_orders_count():
-    """
-    Get total orders count for farmer
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        
         cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
         count = cur.fetchone()[0]
-        
         cur.close()
         conn.close()
-        
         return jsonify({"status": "success", "count": count}), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Unique Customers Count ------------------
 @farmer_bp.route("/orders/customers", methods=["GET"])
+@jwt_required()
 def get_unique_customers():
-    """
-    Get unique customers count for farmer
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT COUNT(DISTINCT consumer_id) 
-            FROM orders 
-            WHERE farmer_id=%s
-        """, (farmer_id,))
+        cur.execute("SELECT COUNT(DISTINCT consumer_id) FROM orders WHERE farmer_id=%s", (farmer_id,))
         count = cur.fetchone()[0]
-        
         cur.close()
         conn.close()
-        
         return jsonify({"status": "success", "count": count}), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Dashboard Summary ------------------
 @farmer_bp.route("/dashboard/summary", methods=["GET"])
+@jwt_required()
 def get_dashboard_summary():
-    """
-    Get complete dashboard summary in one call
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Get farmer info
-        cur.execute("""
-            SELECT id, fullname, email, location, user_type
-            FROM users
-            WHERE id=%s
-        """, (farmer_id,))
+        cur.execute("SELECT id, fullname, email, location, user_type FROM users WHERE id=%s", (farmer_id,))
         farmer_row = cur.fetchone()
-        
         if not farmer_row:
             return jsonify({"error": "Farmer not found"}), 404
-        
         farmer_info = {
             "id": farmer_row[0],
             "fullname": farmer_row[1],
@@ -316,22 +211,12 @@ def get_dashboard_summary():
             "location": farmer_row[3],
             "user_type": farmer_row[4]
         }
-        
-        # Get stats
         cur.execute("SELECT COUNT(*) FROM farmer_items WHERE farmer_id=%s", (farmer_id,))
         total_products = cur.fetchone()[0]
-        
         cur.execute("SELECT COUNT(*) FROM orders WHERE farmer_id=%s", (farmer_id,))
         total_orders = cur.fetchone()[0]
-        
-        cur.execute("""
-            SELECT COUNT(DISTINCT consumer_id) 
-            FROM orders 
-            WHERE farmer_id=%s
-        """, (farmer_id,))
+        cur.execute("SELECT COUNT(DISTINCT consumer_id) FROM orders WHERE farmer_id=%s", (farmer_id,))
         unique_customers = cur.fetchone()[0]
-        
-        # Get recent orders (5)
         cur.execute("""
             SELECT o.id, o.consumer_id, o.quantity, o.total_price, 
                    o.status, o.order_date, u.fullname as consumer_name
@@ -341,7 +226,6 @@ def get_dashboard_summary():
             ORDER BY o.order_date DESC
             LIMIT 5
         """, (farmer_id,))
-        
         order_rows = cur.fetchall()
         recent_orders = []
         for row in order_rows:
@@ -354,10 +238,8 @@ def get_dashboard_summary():
                 "order_date": row[5].strftime("%Y-%m-%d %H:%M:%S") if row[5] else None,
                 "consumer_name": row[6] or f"Customer {row[1]}"
             })
-        
         cur.close()
         conn.close()
-        
         return jsonify({
             "status": "success",
             "farmer": farmer_info,
@@ -368,25 +250,17 @@ def get_dashboard_summary():
             },
             "recent_orders": recent_orders
         }), 200
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
 # ==================== PRODUCT ENDPOINTS ====================
 
-# ------------------ Add Product ------------------
 @farmer_bp.route("/add-product", methods=["POST"])
+@jwt_required()
 def add_product():
-    """
-    Add a new product for the logged-in farmer
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
-        # Get product data from form-data
+        farmer_id = get_jwt_identity()
         item_name = request.form.get("item_name")
         price = float(request.form.get("price"))
         location = request.form.get("location")
@@ -394,22 +268,16 @@ def add_product():
         available_stock = int(request.form.get("available_stock"))
         photo = request.files.get("photo")
 
-        # Validate all fields
         if not all([item_name, price, location, min_order_qty, available_stock, photo]):
             return jsonify({"error": "All fields including photo are required"}), 400
-
-        # Validate file type
         if not allowed_file(photo.filename):
             return jsonify({"error": "Invalid file type"}), 400
 
-        # Secure filename and save photo
         filename = secure_filename(photo.filename)
         photo.save(os.path.join(UPLOAD_FOLDER, filename))
 
-        # Get coordinates from location
         latitude, longitude = location_coords.get(location, (None, None))
 
-        # Insert product into database
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -422,34 +290,25 @@ def add_product():
         conn.close()
 
         return jsonify({"message": "Product added successfully"}), 201
-
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Get Products ------------------
 @farmer_bp.route("/products", methods=["GET"])
+@jwt_required()
 def get_products():
-    """
-    Get all products for the logged-in farmer
-    """
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
+        farmer_id = get_jwt_identity()
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, item_name, price, photo_path, location, min_order_qty, available_stock,status, latitude, longitude
+            SELECT id, item_name, price, photo_path, location, min_order_qty, available_stock, status, latitude, longitude
             FROM farmer_items
             WHERE farmer_id=%s
         """, (farmer_id,))
         rows = cur.fetchall()
         cur.close()
         conn.close()
-
-        # Convert rows to list of dicts
         products = [
             {
                 "id": r[0],
@@ -459,286 +318,26 @@ def get_products():
                 "location": r[4],
                 "min_order_qty": r[5],
                 "available_stock": r[6],
-                "status":r[7],
+                "status": r[7],
                 "latitude": r[8],
                 "longitude": r[9]
             } for r in rows
         ]
-
         return jsonify({"products": products}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ------------------ Update Product (with approval) ------------------
-@farmer_bp.route("/update-product/<int:product_id>", methods=["PUT"])
-def update_product(product_id):
-    """
-    Update a product - creates an edit request that needs admin approval
-    """
-    try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # 1. Check if product exists and belongs to farmer
-        cur.execute("""
-            SELECT id, item_name, price, location, min_order_qty, 
-                   available_stock, photo_path, status, is_approved
-            FROM farmer_items 
-            WHERE id=%s AND farmer_id=%s
-        """, (product_id, farmer_id))
-        
-        product = cur.fetchone()
-        if not product:
-            return jsonify({"error": "Product not found or unauthorized"}), 404
-        
-        # 2. Check if product is approved
-        if not product[8]:
-            return jsonify({"error": "Cannot edit a product that is not approved"}), 400
-        
-        # 3. Check if there's already a pending edit
-        cur.execute("SELECT has_pending_edit FROM farmer_items WHERE id=%s", (product_id,))
-        has_pending_result = cur.fetchone()
-        
-        if has_pending_result and has_pending_result[0]:
-            return jsonify({"error": "This product already has a pending edit request"}), 400
-        
-        # 4. Get current product data
-        current_data = {
-            "item_name": product[1],
-            "price": float(product[2]),
-            "location": product[3],
-            "min_order_qty": product[4] or 1,
-            "available_stock": product[5] or 0,
-            "photo_path": product[6]
-        }
-        
-        # 5. Get updated fields from form
-        item_name = request.form.get("item_name", "").strip()
-        price = request.form.get("price", "").strip()
-        location = request.form.get("location", "").strip()
-        min_order_qty = request.form.get("min_order_qty", "").strip()
-        available_stock = request.form.get("available_stock", "").strip()
-        photo = request.files.get("photo")
-        
-        # 6. Validate required fields
-        if not item_name:
-            return jsonify({"error": "Item name is required"}), 400
-        if not price:
-            return jsonify({"error": "Price is required"}), 400
-        if not location:
-            return jsonify({"error": "Location is required"}), 400
-        
-        try:
-            price = float(price)
-            if price <= 0:
-                return jsonify({"error": "Price must be greater than 0"}), 400
-        except ValueError:
-            return jsonify({"error": "Invalid price format"}), 400
-        
-        # Handle optional fields
-        try:
-            min_order_qty = int(min_order_qty) if min_order_qty else current_data["min_order_qty"]
-            available_stock = int(available_stock) if available_stock else current_data["available_stock"]
-        except ValueError:
-            return jsonify({"error": "Invalid number format for quantity or stock"}), 400
-        
-        if min_order_qty <= 0:
-            return jsonify({"error": "Minimum order quantity must be greater than 0"}), 400
-        
-        if available_stock < 0:
-            return jsonify({"error": "Available stock cannot be negative"}), 400
-        
-        # 7. Handle photo upload
-        proposed_photo_path = current_data["photo_path"]
-        if photo and allowed_file(photo.filename):
-            filename = secure_filename(photo.filename)
-            photo.save(os.path.join(UPLOAD_FOLDER, filename))
-            proposed_photo_path = filename
-        
-        # 8. Get coordinates for location
-        latitude, longitude = location_coords.get(location, (None, None))
-        
-        # 9. Create edit request in database (16 columns, 16 values)
-        cur.execute("""
-            INSERT INTO product_edit_requests (
-                product_id, farmer_id,
-                current_item_name, current_price, current_location, 
-                current_min_order_qty, current_available_stock, current_photo_path,
-                proposed_item_name, proposed_price, proposed_location,
-                proposed_min_order_qty, proposed_available_stock, proposed_photo_path,
-                proposed_latitude, proposed_longitude
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            product_id, farmer_id,
-            current_data["item_name"], current_data["price"], current_data["location"],
-            current_data["min_order_qty"], current_data["available_stock"], current_data["photo_path"],
-            item_name, price, location,
-            min_order_qty, available_stock, proposed_photo_path,
-            latitude, longitude
-        ))
-        
-        edit_request_id = cur.fetchone()[0]
-        
-        # 10. Mark product as having pending edit
-        cur.execute("""
-            UPDATE farmer_items 
-            SET has_pending_edit = TRUE,
-                edit_status = 'edit_pending',
-                edit_requested_at = NOW()
-            WHERE id = %s
-        """, (product_id,))
-        
-        conn.commit()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "message": "Edit request submitted successfully! Waiting for admin approval.",
-            "edit_request_id": edit_request_id,
-            "status": "edit_pending",
-            "product_id": product_id
-        }), 200
-
-    except Exception as e:
-        print("ERROR in update_product:", e)
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-# ------------------ Get Pending Edit Requests ------------------
-@farmer_bp.route("/edit-requests/pending", methods=["GET"])
-def get_pending_edit_requests():
-    """
-    Get all pending edit requests for the farmer
-    """
-    try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT 
-                er.id as request_id,
-                er.product_id,
-                er.requested_at,
-                fi.item_name as current_name,
-                er.proposed_item_name as proposed_name,
-                er.current_price,
-                er.proposed_price,
-                er.current_location,
-                er.proposed_location,
-                er.edit_status
-            FROM product_edit_requests er
-            JOIN farmer_items fi ON er.product_id = fi.id
-            WHERE er.farmer_id = %s 
-            AND er.edit_status = 'edit_pending'
-            ORDER BY er.requested_at DESC
-        """, (farmer_id,))
-        
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        edit_requests = []
-        for row in rows:
-            edit_requests.append({
-                "id": row[0],
-                "product_id": row[1],
-                "requested_at": row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else None,
-                "current_name": row[3],
-                "proposed_name": row[4],
-                "current_price": float(row[5]) if row[5] else 0,
-                "proposed_price": float(row[6]) if row[6] else 0,
-                "current_location": row[7],
-                "proposed_location": row[8],
-                "status": row[9],
-                "time_ago": get_time_ago(row[2].strftime("%Y-%m-%d %H:%M:%S") if row[2] else "")
-            })
-        
-        return jsonify({"edit_requests": edit_requests, "count": len(edit_requests)}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-# ------------------ Cancel Edit Request ------------------
-@farmer_bp.route("/edit-request/<int:request_id>/cancel", methods=["DELETE"])
-def cancel_edit_request(request_id):
-    """
-    Cancel a pending edit request
-    """
-    try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Check if request exists and belongs to farmer
-        cur.execute("""
-            SELECT er.id, er.product_id 
-            FROM product_edit_requests er
-            WHERE er.id = %s AND er.farmer_id = %s
-        """, (request_id, farmer_id))
-        
-        request_data = cur.fetchone()
-        if not request_data:
-            return jsonify({"error": "Edit request not found or unauthorized"}), 404
-        
-        product_id = request_data[1]
-        
-        # Delete the edit request
-        cur.execute("DELETE FROM product_edit_requests WHERE id = %s", (request_id,))
-        
-        # Update product to remove pending edit flag
-        cur.execute("""
-            UPDATE farmer_items 
-            SET has_pending_edit = FALSE,
-                edit_status = NULL
-            WHERE id = %s
-        """, (product_id,))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        return jsonify({"message": "Edit request cancelled successfully"}), 200
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ==================== TEST ENDPOINTS ====================
 
 @farmer_bp.route("/test", methods=["GET"])
+@jwt_required()
 def test_endpoint():
-    """Test endpoint to verify farmer routes are working"""
     try:
-        farmer_id = session.get("user_id")
-        if not farmer_id:
-            return jsonify({"error": "Not logged in"}), 401
-            
+        farmer_id = get_jwt_identity()
         return jsonify({
             "status": "success",
-            "message": "Farmer endpoints are working",
-            "farmer_id": farmer_id,
-            "endpoints": [
-                "/farmer/me",
-                "/farmer/stats",
-                "/farmer/products",
-                "/farmer/orders/recent",
-                "/farmer/dashboard/summary"
-            ]
+            "message": "Farmer endpoints are working with JWT",
+            "farmer_id": farmer_id
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
