@@ -8,68 +8,37 @@ admin_bp = Blueprint('admin', __name__)
 
 # ========== ADMIN AUTHENTICATION ==========
 
+from flask import Blueprint, request, jsonify, session
+
+admin_bp = Blueprint('admin', __name__)
+
 @admin_bp.route('/login', methods=['POST'])
 def admin_login():
-    """Admin login endpoint"""
     try:
         data = request.get_json()
         email = data.get('email', '').strip()
         password = data.get('password', '').strip()
-        
-        print(f"📧 Login attempt for: {email}")
-        
-        if not email or not password:
+
+        # 🔥 TEMPORARY HARDCODE – for testing only
+        if email == 'admin@kisanlink.com' and password == 'admin123':
+            session['user_id'] = 1   # or some valid ID
+            session['user_type'] = 'admin'
+            session['admin_logged_in'] = True
+            session['admin_name'] = 'Admin'
             return jsonify({
-                'success': False,
-                'error': 'Email and password are required'
-            }), 400
-        
-        # Query database
-        query = text("""
-            SELECT id, fullname, email, password_hash, user_type 
-            FROM users 
-            WHERE email = :email AND user_type = 'admin'
-        """)
-        
-        result = db.session.execute(query, {'email': email})
-        user = result.fetchone()
-        
-        if not user:
-            return jsonify({'success': False, 'error': 'Admin user not found'}), 401
-        
-        # Check password
-        if password != user.password_hash:
-            return jsonify({'success': False, 'error': 'Invalid password'}), 401
-        
-        # Set session
-        session['admin_id'] = user.id
-        session['admin_email'] = user.email
-        session['admin_name'] = user.fullname
-        session['admin_logged_in'] = True
-        
-        # Update last login
-        update_query = text("""
-            UPDATE users 
-            SET last_login = NOW(), 
-                login_count = COALESCE(login_count, 0) + 1
-            WHERE id = :user_id
-        """)
-        db.session.execute(update_query, {'user_id': user.id})
-        db.session.commit()
-        
-        print(f"✅ Admin login successful: {user.fullname}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Login successful',
-            'user_type': user.user_type,
-            'user_name': user.fullname,
-            'user_id': user.id
-        })
-        
+                'success': True,
+                'message': 'Login successful',
+                'user_type': 'admin',
+                'user_name': 'Admin',
+                'user_id': 1
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Invalid admin credentials'}), 401
+
     except Exception as e:
-        print(f"❌ Admin login error: {str(e)}")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 
 @admin_bp.route('/check-auth', methods=['GET'])
 def admin_check_auth():
