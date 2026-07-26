@@ -177,3 +177,52 @@ def login():
             
     except Exception as login_server_err:
         return jsonify({"error": f"Login initialization processing failure: {str(login_server_err)}"}), 500
+
+
+# -----------------------------
+# ME - Check current session / who is logged in
+# -----------------------------
+@auth_bp.route("/me", methods=["GET"])
+def me():
+    """Return the currently logged-in user based on the session cookie"""
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({"authenticated": False}), 200
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, fullname, email, user_type
+            FROM users WHERE id = %s
+        """, (user_id,))
+        user = cur.fetchone()
+
+        if not user:
+            session.clear()
+            return jsonify({"authenticated": False}), 200
+
+        user_id, fullname, email, user_type = user
+        return jsonify({
+            "authenticated": True,
+            "id": user_id,
+            "fullname": fullname,
+            "email": email,
+            "user_type": user_type
+        }), 200
+    except Exception as me_err:
+        return jsonify({"error": f"Session check failure: {str(me_err)}"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+# -----------------------------
+# LOGOUT - Clear session
+# -----------------------------
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    """Clear the session cookie"""
+    session.clear()
+    return jsonify({"message": "Logged out successfully"}), 200
