@@ -280,14 +280,14 @@ def index():
 # Wipes old mismatched tables so Gunicorn can recreate them with the 'is_active' column.
 with app.app_context():
     try:
-        print("🧹 Wiping old mismatched tables...")
+        print("🧼 STEP 1: Wiping old mismatched cloud database tables...")
         db.drop_all()
         
-        print("🏗️ Rebuilding clean tables with all necessary columns...")
+        print("🏗️ STEP 2: Rebuilding fresh schemas with 'is_active' columns...")
         db.create_all()
-        print("✅ Render cloud database tables synchronized perfectly!")
-    except Exception as e:
-        print(f"⚠️ Cloud table generation status note: {e}")
+        print("✅ SUCCESS: Render cloud database tables synchronized perfectly!")
+    except Exception as server_db_error:
+        print(f"❌ DATABASE ERROR: {server_db_error}")
 
 # ------------------------------
 # RUN APP (Used for local laptop testing only)
