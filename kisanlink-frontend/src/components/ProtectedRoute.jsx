@@ -1,4 +1,3 @@
-// src/components/ProtectedRoute.jsx
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
@@ -9,21 +8,25 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
 
   useEffect(() => {
     const checkAuth = async () => {
+      const token = localStorage.getItem('access_token');
+      
+      if (!token) {
+        setLoading(false);
+        setUser(null);
+        return;
+      }
+
       try {
-        const response = await fetch(
-          `${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/me`,
-          {
-            credentials: "include",
+        const response = await fetch(`/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`  // <-- THIS IS THE FIX
           }
-        );
+        });
 
         if (response.ok) {
           const data = await response.json();
-          if (data.authenticated) {
-            setUser(data);
-          } else {
-            setUser(null);
-          }
+          if (data.authenticated) setUser(data);
+          else setUser(null);
         } else {
           setUser(null);
         }
@@ -50,11 +53,8 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   }
 
   if (allowedUserType && user.user_type !== allowedUserType) {
-    if (user.user_type === 'farmer') {
-      return <Navigate to="/farmer/dashboard" replace />;
-    } else if (user.user_type === 'consumer') {
-      return <Navigate to="/consumer/dashboard" replace />;
-    }
+    if (user.user_type === 'farmer') return <Navigate to="/farmer/dashboard" replace />;
+    else if (user.user_type === 'consumer') return <Navigate to="/consumer/dashboard" replace />;
     return <Navigate to="/login" replace />;
   }
 
