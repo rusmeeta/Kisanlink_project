@@ -13,17 +13,17 @@ if env_path.exists():
     load_dotenv(env_path)
 
 app = Flask(__name__)
-app.url_map.strict_slashes = False   # ← fixes CORS preflight redirect
+app.url_map.strict_slashes = False
 
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
 app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
 jwt = JWTManager(app)
 
-# CORS – allow Vercel
+# ---------- CORS ----------
 CORS(app,
      origins=[
-         "https://kisanlink-project-l21nkd7bb-rusmeetas-projects.vercel.app",
-         "https://kisanlink-project.vercel.app",
+         # Add your exact Vercel URL (copy from browser)
+         "https://kisanlink-project-5kjkkhxet-rusmeetas-projects.vercel.app",
          re.compile(r"^https://.*\.vercel\.app$"),
          "http://localhost:3000",
          "http://localhost:5001"
@@ -31,6 +31,24 @@ CORS(app,
      supports_credentials=True,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
      allow_headers=["Content-Type", "Authorization", "Accept"])
+
+# ---------- EXPLICIT CORS HEADERS (FALLBACK) ----------
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        # Allow any Vercel origin or localhost
+        allowed = (
+            origin.startswith('http://localhost:')
+            or origin.startswith('https://kisanlink-project')
+            or origin.endswith('.vercel.app')
+        )
+        if allowed:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+    return response
 
 # Import blueprints
 from config import Config
@@ -64,15 +82,15 @@ app.register_blueprint(simple_bp, url_prefix='/simple')
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(complaints_bp, url_prefix='/complaints')
 
-# Global JWT protection – only these endpoints are public
+# ---------- GLOBAL JWT PROTECTION ----------
 PUBLIC_ENDPOINTS = ['/auth/login', '/auth/signup', '/', '/debug-env', '/test-email', '/uploads']
 @app.before_request
 def jwt_global_protection():
+    if request.method == 'OPTIONS':
+        return
     for endpoint in PUBLIC_ENDPOINTS:
         if request.path.startswith(endpoint):
             return
-    if request.method == 'OPTIONS':
-        return
     try:
         verify_jwt_in_request()
     except Exception:
@@ -84,7 +102,7 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'upload
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# DB sync – ensures columns exist
+# DB sync
 try:
     from db import get_db_connection
     conn = get_db_connection()
@@ -94,9 +112,8 @@ try:
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
-    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")  # if needed
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")
     cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
-    # Also ensure farmer_items has status column
     cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved';")
     conn.commit()
     cur.close()
