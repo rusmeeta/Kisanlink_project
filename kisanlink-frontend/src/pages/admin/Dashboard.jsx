@@ -1,3 +1,4 @@
+// src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -33,7 +34,7 @@ import {
   XCircle,
   Eye as EyeIcon
 } from "lucide-react";
-import axios from "axios";
+import apiClient from "../../api";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -72,41 +73,31 @@ const AdminDashboard = () => {
     return () => clearInterval(interval);
   }, [navigate]);
 
-  // In AdminDashboard.jsx - Update checkAdminAuth function
-const checkAdminAuth = async () => {
-  // First check localStorage (as backup)
-  const isAdminLoggedInLocal = localStorage.getItem("adminLoggedIn");
-  
-  if (!isAdminLoggedInLocal) {
-    console.log("❌ No admin login found in localStorage, redirecting...");
-    navigate("/");
-    return;
-  }
-  
-  // Try to verify with backend
-  try {
-    const response = await axios.get("http://localhost:5001/admin/check-auth", {
-      withCredentials: true
-    });
+  const checkAdminAuth = async () => {
+    const isAdminLoggedInLocal = localStorage.getItem("adminLoggedIn");
+    if (!isAdminLoggedInLocal) {
+      console.log("❌ No admin login found in localStorage, redirecting...");
+      navigate("/");
+      return;
+    }
 
-    if (response.data.authenticated) {
-      setAdminName(response.data.name || "Admin");
-    } else {
-      // Backend says not authenticated, but localStorage says we are
-      console.warn("Backend auth failed, continuing with localStorage auth");
+    try {
+      const response = await apiClient.get("/admin/check-auth");
+      if (response.data.authenticated) {
+        setAdminName(response.data.name || "Admin");
+      } else {
+        console.warn("Backend auth failed, continuing with localStorage auth");
+        setAdminName(localStorage.getItem("adminName") || "Admin");
+      }
+    } catch (err) {
+      console.warn("Could not verify with backend, using localStorage:", err.message);
       setAdminName(localStorage.getItem("adminName") || "Admin");
     }
-  } catch (err) {
-    console.warn("Could not verify with backend, using localStorage:", err.message);
-    // Continue with localStorage
-    setAdminName(localStorage.getItem("adminName") || "Admin");
-  }
-};
+  };
+
   const loadEditRequests = async () => {
     try {
-      const response = await axios.get("http://localhost:5001/admin/edit-requests/pending", {
-        withCredentials: true
-      });
+      const response = await apiClient.get("/admin/edit-requests/pending");
       if (response.data.success) {
         setPendingEditRequests(response.data.edit_requests || []);
       }
@@ -118,95 +109,38 @@ const checkAdminAuth = async () => {
   const loadComplaints = async () => {
     try {
       console.log("Loading complaints...");
-      
-      // First check if we're authenticated
-      try {
-        const authCheck = await axios.get("http://localhost:5001/admin/check-auth", {
-          withCredentials: true
-        });
-        console.log("Auth check:", authCheck.data);
-      } catch (authErr) {
-        console.log("Auth check failed, might not be admin");
-      }
-      
-      const response = await axios.get("http://localhost:5001/complaints/admin/all", {
-        withCredentials: true
-      });
+      const response = await apiClient.get("/complaints/admin/all");
       console.log("Complaints API Response:", response.data);
-      
       if (response.data.success) {
         const complaints = response.data.complaints || [];
         console.log("Complaints loaded:", complaints.length, "items");
         setRecentComplaints(complaints);
       } else {
         console.error("API returned success=false:", response.data);
-        // Try the simple endpoint as fallback
-        try {
-          const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
-            withCredentials: true
-          });
-          if (simpleResponse.data.success) {
-            console.log("Using simple test data:", simpleResponse.data.complaints.length);
-            setRecentComplaints(simpleResponse.data.complaints);
-          }
-        } catch (simpleErr) {
-          console.error("Simple test also failed:", simpleErr);
-        }
-      }
-    } catch (err) {
-      console.error("Error loading complaints:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
-      
-      // Try fallback to simple endpoint
-      try {
-        const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
-          withCredentials: true
-        });
-        if (simpleResponse.data.success) {
-          console.log("Fallback: Using simple test data");
-          setRecentComplaints(simpleResponse.data.complaints);
-        }
-      } catch (fallbackErr) {
-        console.error("Fallback also failed:", fallbackErr);
         setRecentComplaints([]);
       }
+    } catch (err) {
+      console.error("Error loading complaints:", err);
+      setRecentComplaints([]);
     }
   };
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
-      // Load dashboard stats
-      const statsResponse = await axios.get("http://localhost:5001/admin/stats", {
-        withCredentials: true
-      });
-      
+      const statsResponse = await apiClient.get("/admin/stats");
       if (statsResponse.data.success) {
         setStats(statsResponse.data);
       }
 
-      // Load recent farmers
-      const farmersResponse = await axios.get("http://localhost:5001/admin/recent-farmers", {
-        withCredentials: true
-      });
+      const farmersResponse = await apiClient.get("/admin/recent-farmers");
       setRecentFarmers(farmersResponse.data.farmers || []);
 
-      // Load recent products
-      const productsResponse = await axios.get("http://localhost:5001/admin/recent-products", {
-        withCredentials: true
-      });
+      const productsResponse = await apiClient.get("/admin/recent-products");
       setRecentProducts(productsResponse.data.products || []);
 
-      // Load pending edit requests
       await loadEditRequests();
-
-      // Load complaints
       await loadComplaints();
-
     } catch (err) {
       console.error("Error loading dashboard:", err);
     } finally {
@@ -217,12 +151,7 @@ const checkAdminAuth = async () => {
   const handleApproveEditRequest = async (requestId) => {
     try {
       setIsProcessing(true);
-      const response = await axios.post(
-        `http://localhost:5001/admin/edit-requests/${requestId}/approve`,
-        {},
-        { withCredentials: true }
-      );
-      
+      const response = await apiClient.post(`/admin/edit-requests/${requestId}/approve`);
       if (response.data.success) {
         alert("Edit request approved successfully!");
         loadEditRequests();
@@ -245,12 +174,9 @@ const checkAdminAuth = async () => {
 
     try {
       setIsProcessing(true);
-      const response = await axios.post(
-        `http://localhost:5001/admin/edit-requests/${requestId}/reject`,
-        { reason: rejectReason },
-        { withCredentials: true }
-      );
-      
+      const response = await apiClient.post(`/admin/edit-requests/${requestId}/reject`, {
+        reason: rejectReason,
+      });
       if (response.data.success) {
         alert("Edit request rejected!");
         loadEditRequests();
@@ -269,17 +195,11 @@ const checkAdminAuth = async () => {
   const handleUpdateComplaintStatus = async (complaintId, status) => {
     try {
       setIsProcessing(true);
-      const response = await axios.put(
-        `http://localhost:5001/complaints/admin/update/${complaintId}`,
-        { 
-          status,
-          admin_reply: complaintReply || `Complaint marked as ${status}`
-        },
-        { withCredentials: true }
-      );
-      
+      const response = await apiClient.put(`/complaints/admin/update/${complaintId}`, {
+        status,
+        admin_reply: complaintReply || `Complaint marked as ${status}`,
+      });
       console.log("Update complaint response:", response.data);
-      
       if (response.data.success) {
         alert(`Complaint marked as ${status}!`);
         await loadComplaints();
@@ -297,9 +217,7 @@ const checkAdminAuth = async () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5001/admin/logout", {}, {
-        withCredentials: true
-      });
+      await apiClient.post("/admin/logout");
     } finally {
       localStorage.clear();
       navigate("/admin");
@@ -342,16 +260,10 @@ const checkAdminAuth = async () => {
     }
   };
 
-  // Helper function to scroll to section
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
     if (element) {
-      element.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'start' 
-      });
-      
-      // Add highlight effect
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2');
       setTimeout(() => {
         element.classList.remove('ring-2', 'ring-orange-500', 'ring-offset-2');
@@ -362,7 +274,7 @@ const checkAdminAuth = async () => {
   };
 
   const StatCard = ({ title, value, change, icon, color, link, onClick }) => (
-    <div 
+    <div
       className={`bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow ${(link || onClick) ? 'cursor-pointer hover:border-blue-300' : ''}`}
       onClick={onClick || (link ? () => navigate(link) : undefined)}
     >
@@ -426,7 +338,6 @@ const checkAdminAuth = async () => {
     );
   }
 
-  // Calculate complaint statistics
   const pendingComplaints = recentComplaints.filter(c => c.status === 'pending').length;
   const resolvedComplaints = recentComplaints.filter(c => c.status === 'resolved').length;
   const dismissedComplaints = recentComplaints.filter(c => c.status === 'dismissed').length;
@@ -1150,7 +1061,6 @@ const checkAdminAuth = async () => {
                 </button>
               </div>
 
-              {/* User Information */}
               <div className="bg-gray-50 p-4 rounded-lg mb-6">
                 <h4 className="font-semibold text-gray-800 mb-3">User Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -1173,13 +1083,11 @@ const checkAdminAuth = async () => {
                 </div>
               </div>
 
-              {/* Complaint Content */}
               <div className="bg-red-50 p-4 rounded-lg mb-6">
                 <h4 className="font-semibold text-red-800 mb-3">Complaint Text</h4>
                 <p className="text-gray-800 whitespace-pre-wrap">{selectedComplaint.complaint_text}</p>
               </div>
 
-              {/* Current Status */}
               <div className="bg-blue-50 p-4 rounded-lg mb-6">
                 <h4 className="font-semibold text-blue-800 mb-3">Current Status</h4>
                 <div className="flex items-center gap-4">
@@ -1194,7 +1102,6 @@ const checkAdminAuth = async () => {
                 </div>
               </div>
 
-              {/* Admin Response */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-800 mb-3">Admin Response</h4>
                 <textarea
@@ -1209,7 +1116,6 @@ const checkAdminAuth = async () => {
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex justify-end space-x-4">
                 <button
                   onClick={() => {
@@ -1220,14 +1126,12 @@ const checkAdminAuth = async () => {
                 >
                   Cancel
                 </button>
-                
                 <button
                   onClick={() => handleUpdateComplaintStatus(selectedComplaint.id, 'dismissed')}
                   className="px-5 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 font-medium"
                 >
                   Dismiss Complaint
                 </button>
-                
                 <button
                   onClick={() => handleUpdateComplaintStatus(selectedComplaint.id, 'resolved')}
                   disabled={isProcessing}
@@ -1270,7 +1174,6 @@ const checkAdminAuth = async () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Current Data */}
                 <div className="bg-red-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-red-800 mb-3 flex items-center">
                     <AlertTriangle size={18} className="mr-2" />
@@ -1302,7 +1205,6 @@ const checkAdminAuth = async () => {
                   </div>
                 </div>
 
-                {/* Proposed Data */}
                 <div className="bg-green-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-800 mb-3 flex items-center">
                     <Edit2 size={18} className="mr-2" />
@@ -1335,7 +1237,6 @@ const checkAdminAuth = async () => {
                 </div>
               </div>
 
-              {/* Farmer Info */}
               <div className="bg-gray-50 p-4 rounded-lg mb-6">
                 <h4 className="font-semibold text-gray-800 mb-3">Farmer Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1358,7 +1259,6 @@ const checkAdminAuth = async () => {
                 </div>
               </div>
 
-              {/* Rejection Section */}
               <div className="border-t pt-6">
                 <h4 className="font-semibold text-gray-800 mb-3">Rejection Reason (if rejecting)</h4>
                 <textarea
@@ -1370,7 +1270,6 @@ const checkAdminAuth = async () => {
                 />
               </div>
 
-              {/* Actions */}
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => {
