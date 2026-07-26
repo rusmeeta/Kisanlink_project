@@ -46,7 +46,7 @@ from routes.complaints import complaints_bp
 
 
 
-app.url_map.strict_slashes = False
+
 
 # ------------------------------
 # INIT FLASK APP
@@ -54,6 +54,8 @@ app.url_map.strict_slashes = False
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
+
+app.url_map.strict_slashes = False 
 
 # ========== JWT CONFIGURATION (ADD THESE 3 LINES) ==========
 app.config['JWT_SECRET_KEY'] = os.getenv("SECRET_KEY", "supersecretkey")
