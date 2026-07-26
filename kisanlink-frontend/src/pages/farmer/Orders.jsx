@@ -1,6 +1,9 @@
 // src/pages/farmer/Orders.jsx - SIMPLE TABLE
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE } from "../../api";
+
+const getToken = () => localStorage.getItem('access_token');
 
 const FarmerOrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -12,10 +15,11 @@ const FarmerOrdersPage = () => {
       setLoading(true);
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+      const response = await fetch(`${API_BASE}/orders/farmer/${farmerId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${getToken()}`
         }
       });
       
@@ -37,9 +41,10 @@ const FarmerOrdersPage = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch("http://localhost:5001/orders/update-status", {
+      const response = await fetch(`${API_BASE}/orders/update-status`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" ,
+        "Authorization": `Bearer ${getToken()}`},
         body: JSON.stringify({
           order_id: orderId,
           farmer_id: farmerId,

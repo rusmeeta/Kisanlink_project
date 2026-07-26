@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, RefreshCw, ArrowLeft, MessageCircle, ShoppingCart, Check } from 'lucide-react';
+import { API_BASE } from '../../api';
+
+const getToken = () => localStorage.getItem('access_token');
 
 const FarmerNotifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -16,10 +19,12 @@ const FarmerNotifications = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:5001/notifications', {
-        credentials: 'include',
-        cache: 'no-store'
-      });
+      const response = await fetch(`${API_BASE}/notifications`, {
+      headers: {
+     'Authorization': `Bearer ${getToken()}`
+     },
+  cache: 'no-store'
+});
       
       if (response.ok) {
         const data = await response.json();
@@ -59,12 +64,14 @@ const FarmerNotifications = () => {
       );
       
       // Then send API request
-      const response = await fetch(`http://localhost:5001/notifications/${notificationId}/read`, {
+      const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
         method: 'POST',
-        credentials: 'include',
+        
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
         }
+
       });
       
       const result = await response.json();

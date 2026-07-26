@@ -2,6 +2,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, MessageCircle, User, Clock, RefreshCw, Mail } from "lucide-react";
+import { API_BASE } from "../../api";
+
+const getToken = () => localStorage.getItem('access_token');
 
 const FarmerMessages = () => {
   const [conversations, setConversations] = useState([]);
@@ -10,16 +13,16 @@ const FarmerMessages = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const navigate = useNavigate();
-  const API_BASE_URL = "http://localhost:5001";
 
   const fetchConversations = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/messages/farmer-conversations`, {
+      const response = await fetch(`${API_BASE}/messages/farmer-conversations`, {
         method: 'GET',
-        credentials: 'include',
+        
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       
@@ -59,11 +62,12 @@ const FarmerMessages = () => {
     
     try {
       // Mark messages as read (farmer endpoint)
-      await fetch(`${API_BASE_URL}/messages/mark-seen/${consumer_id}`, {
+      await fetch(`${API_BASE}/messages/mark-seen/${consumer_id}`, {
         method: 'POST',
-        credentials: 'include',
+        
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       
