@@ -1,8 +1,10 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
 from models_user import User
 from models_message import Message
 from datetime import datetime
+from sqlalchemy import text
 
 messages_bp = Blueprint("messages", __name__)
 
@@ -19,21 +21,17 @@ def get_user_info(user_id):
         }
     return None
 
-# Get messages between logged-in user and another user WITH NAMES
+# Get messages between logged-in user and another user
 @messages_bp.route("/<int:other_id>", methods=["GET"])
+@jwt_required()
 def get_messages(other_id):
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    user_id = int(get_jwt_identity())
 
-    user_id = session["user_id"]
-
-    # Get messages
     msgs = Message.query.filter(
         ((Message.sender_id == user_id) & (Message.receiver_id == other_id)) |
         ((Message.sender_id == other_id) & (Message.receiver_id == user_id))
     ).order_by(Message.created_at.asc()).all()
 
-    # Get user info for both parties
     current_user_info = get_user_info(user_id)
     other_user_info = get_user_info(other_id)
 
@@ -41,7 +39,6 @@ def get_messages(other_id):
     for m in msgs:
         sender_info = get_user_info(m.sender_id)
         receiver_info = get_user_info(m.receiver_id)
-        
         messages_with_names.append({
             "id": m.id,
             "sender_id": m.sender_id,
@@ -63,23 +60,19 @@ def get_messages(other_id):
 
 # Send a message
 @messages_bp.route("/<int:other_id>", methods=["POST"])
+@jwt_required()
 def send_message(other_id):
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
+    user_id = int(get_jwt_identity())
     data = request.get_json()
     text = data.get("message")
 
     if not text:
         return jsonify({"status": "error", "message": "Message empty"}), 400
 
-    # Create message
     msg = Message(sender_id=user_id, receiver_id=other_id, message=text)
     db.session.add(msg)
     db.session.commit()
 
-    # Get sender and receiver info
     sender_info = get_user_info(user_id)
     receiver_info = get_user_info(other_id)
 
@@ -98,20 +91,13 @@ def send_message(other_id):
         }
     })
 
-# List all conversations for FARMER (with consumers) - IMPROVED
+# List all conversations for FARMER (with consumers)
 @messages_bp.route("/farmer-conversations", methods=["GET"])
+@jwt_required()
 def get_farmer_conversations():
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
+    user_id = int(get_jwt_identity())
     
-    # Get current farmer info
     farmer_info = get_user_info(user_id)
-    
-    # Get all distinct consumers farmer has chatted with
-    # Using raw SQL for better performance with DISTINCT and latest message
-    from sqlalchemy import text
     
     query = text("""
         SELECT DISTINCT ON (other_id) 
@@ -146,7 +132,6 @@ def get_farmer_conversations():
         consumer = User.query.filter_by(id=other_id, user_type="consumer").first()
         
         if consumer:
-            # Get unread count
             unread_count = Message.query.filter(
                 Message.sender_id == other_id,
                 Message.receiver_id == user_id,
@@ -168,7 +153,6 @@ def get_farmer_conversations():
                 ).count()
             })
     
-    # Sort by last message time
     conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
     
     return jsonify({
@@ -178,19 +162,13 @@ def get_farmer_conversations():
         "count": len(conversations)
     })
 
-# List all conversations for CONSUMER (with farmers) - IMPROVED
+# List all conversations for CONSUMER (with farmers)
 @messages_bp.route("/conversations", methods=["GET"])
+@jwt_required()
 def get_consumer_conversations():
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
+    user_id = int(get_jwt_identity())
     
-    # Get current consumer info
     consumer_info = get_user_info(user_id)
-    
-    # Get all distinct farmers consumer has chatted with
-    from sqlalchemy import text
     
     query = text("""
         SELECT DISTINCT ON (other_id) 
@@ -225,7 +203,6 @@ def get_consumer_conversations():
         farmer = User.query.filter_by(id=other_id, user_type="farmer").first()
         
         if farmer:
-            # Get unread count
             unread_count = Message.query.filter(
                 Message.sender_id == other_id,
                 Message.receiver_id == user_id,
@@ -247,7 +224,6 @@ def get_consumer_conversations():
                 ).count()
             })
     
-    # Sort by last message time
     conversations.sort(key=lambda x: x["last_msg_time"], reverse=True)
     
     return jsonify({
@@ -259,13 +235,10 @@ def get_consumer_conversations():
 
 # Mark messages as seen
 @messages_bp.route("/mark-seen/<int:sender_id>", methods=["POST"])
+@jwt_required()
 def mark_messages_seen(sender_id):
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
+    user_id = int(get_jwt_identity())
     
-    # Mark all messages from this sender as seen
     Message.query.filter(
         Message.sender_id == sender_id,
         Message.receiver_id == user_id,
@@ -281,11 +254,9 @@ def mark_messages_seen(sender_id):
 
 # Get unread message count
 @messages_bp.route("/unread-count", methods=["GET"])
+@jwt_required()
 def get_unread_count():
-    if "user_id" not in session:
-        return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    user_id = session["user_id"]
+    user_id = int(get_jwt_identity())
     
     unread_count = Message.query.filter(
         Message.receiver_id == user_id,
@@ -299,14 +270,16 @@ def get_unread_count():
 
 # Test endpoint
 @messages_bp.route("/test", methods=["GET"])
+@jwt_required()
 def test_endpoint():
+    user_id = get_jwt_identity()
     return jsonify({
         "status": "success", 
-        "message": "Messages endpoint is working",
-        "session_user": session.get("user_id", "No user in session")
+        "message": "Messages endpoint is working with JWT",
+        "user_id": user_id
     })
 
-# Health check
+# Health check (public)
 @messages_bp.route("/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "healthy", "service": "messages"})

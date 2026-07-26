@@ -1,14 +1,18 @@
 from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity  # optional
 from db import get_db_connection
 
 products_bp = Blueprint("products_bp", __name__)
 
 @products_bp.route("/farmer-items", methods=["GET"])
+@jwt_required(optional=True)  # allows both authenticated and anonymous requests
 def get_farmer_items():
+    # If you want to use the logged-in user (optional)
+    current_user = get_jwt_identity()  # will be None if no token
+
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # JOIN farmer_items with users table with STRICT FILTERS
     cur.execute("""
         SELECT fi.id, fi.farmer_id, fi.item_name, fi.price, fi.photo_path, fi.location,
                fi.min_order_qty, fi.available_stock, fi.status, fi.is_approved, 
@@ -18,19 +22,12 @@ def get_farmer_items():
         FROM farmer_items fi
         JOIN users u ON u.id = fi.farmer_id
         WHERE 
-            -- Farmer must be ACTIVE
             u.is_active = TRUE
-            -- Farmer must be VERIFIED  
             AND u.is_email_verified = TRUE
-            -- Product must be APPROVED status
             AND fi.status = 'approved'
-            -- Product must be APPROVED (double-check)
             AND fi.is_approved = TRUE
-            -- Product must have stock
             AND fi.available_stock > 0
-            -- No pending edit requests
             AND (fi.has_pending_edit = FALSE OR fi.has_pending_edit IS NULL)
-            -- Not in edit pending status
             AND (fi.edit_status IS NULL OR fi.edit_status NOT IN ('edit_pending', 'pending_approval'))
         ORDER BY fi.created_at DESC
     """)
@@ -50,15 +47,15 @@ def get_farmer_items():
             "location": row[5],
             "min_order_qty": row[6],
             "available_stock": row[7],
-            "status": row[8],           # Should be 'approved'
-            "is_approved": row[9],      # Should be True
-            "has_pending_edit": row[10], # Should be False
-            "edit_status": row[11],     # Should be NULL or not 'edit_pending'
+            "status": row[8],
+            "is_approved": row[9],
+            "has_pending_edit": row[10],
+            "edit_status": row[11],
             "farmer_name": row[12],
             "farmer_lat": row[13],
             "farmer_lon": row[14],
-            "farmer_active": row[15],   # Should be True
-            "farmer_verified": row[16]  # Should be True
+            "farmer_active": row[15],
+            "farmer_verified": row[16]
         })
     
     return jsonify(items)

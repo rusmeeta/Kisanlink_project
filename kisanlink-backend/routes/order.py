@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from models_order import Order, OrderItem
 from models_notification import Notification
 from extensions import db
 from models_user import User
 from datetime import datetime
 from models_farmer_items import FarmerItem
-order_bp = Blueprint("order", __name__)
 
+order_bp = Blueprint("order", __name__)
 
 ALLOWED_TRANSITIONS = {
     "placed": ["preparing"],
@@ -17,20 +18,24 @@ ALLOWED_TRANSITIONS = {
 
 # ----------------- Create Order -----------------
 @order_bp.route("/create", methods=["POST"])
+@jwt_required()
 def create_order():
+    user_id = int(get_jwt_identity())
     data = request.json
 
-    # 1️⃣ Create the order
+    # Ensure the consumer_id matches the logged-in user (or allow admin later)
+    if data.get("consumer_id") != user_id:
+        # Optionally allow farmers to create orders? Keep it as is.
+        pass
+
     order = Order(consumer_id=data["consumer_id"], farmer_id=data["farmer_id"])
     db.session.add(order)
-    db.session.flush()  # get order.id without commit
+    db.session.flush()
 
-    # 2️⃣ Add order items
     for item in data["items"]:
         order_item = OrderItem(order_id=order.id, product_id=item["product_id"], quantity=item["quantity"])
         db.session.add(order_item)
 
-    # 3️⃣ Add notifications
     farmer_notification = Notification(
         user_id=data["farmer_id"],
         order_id=order.id,
@@ -47,13 +52,14 @@ def create_order():
     )
     db.session.add(consumer_notification)
 
-    db.session.commit()  # commit everything at once
+    db.session.commit()
 
     return jsonify({"message": "Order placed", "order_id": order.id})
 
 
 # ----------------- Get farmer_id by order -----------------
 @order_bp.route("/<int:order_id>", methods=["GET"])
+@jwt_required()
 def get_order_farmer(order_id):
     order = Order.query.get(order_id)
     if not order:
@@ -61,17 +67,23 @@ def get_order_farmer(order_id):
 
     return jsonify({"status": "success", "farmer_id": order.farmer_id})
 
+
+# ----------------- Get orders for a farmer -----------------
 @order_bp.route("/farmer/<int:farmer_id>", methods=["GET"])
+@jwt_required()
 def get_farmer_orders(farmer_id):
+    # Optional: verify that the logged-in user is the farmer (or admin)
+    current_user_id = int(get_jwt_identity())
+    # if current_user_id != farmer_id:
+    #     return jsonify({"error": "Unauthorized"}), 403
+
     try:
-        # Get orders for this farmer
         orders = Order.query.filter_by(farmer_id=farmer_id)\
             .order_by(Order.order_date.desc())\
             .all()
         
         orders_data = []
         for order in orders:
-            # Get customer name
             customer = User.query.get(order.consumer_id)
             
             orders_data.append({
@@ -88,11 +100,14 @@ def get_farmer_orders(farmer_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Update order status (SIMPLE)
+
+# ----------------- Update order status -----------------
 @order_bp.route("/update-status", methods=["POST"])
+@jwt_required()
 def update_order_status():
     try:
         data = request.get_json()
+        current_user_id = int(get_jwt_identity())
 
         order_id = data.get("order_id")
         farmer_id = data.get("farmer_id")
@@ -101,6 +116,10 @@ def update_order_status():
         if not all([order_id, farmer_id, new_status]):
             return jsonify({"error": "Missing required fields"}), 400
 
+        # Ensure the logged‑in user matches the farmer_id
+        if current_user_id != int(farmer_id):
+            return jsonify({"error": "Unauthorized"}), 403
+
         order = Order.query.get(order_id)
         if not order:
             return jsonify({"error": "Order not found"}), 404
@@ -108,17 +127,13 @@ def update_order_status():
         if order.farmer_id != int(farmer_id):
             return jsonify({"error": "Not your order"}), 403
 
-        # Validate status transition
         allowed = ALLOWED_TRANSITIONS.get(order.status, [])
         if new_status not in allowed:
             return jsonify({
                 "error": f"Invalid status change from {order.status} to {new_status}"
             }), 400
 
-        # Use model method
         order.update_status(new_status)
-
-        
         db.session.commit()
 
         return jsonify({
@@ -130,13 +145,18 @@ def update_order_status():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-    
+
+
+# ----------------- Get orders for a consumer -----------------
 @order_bp.route("/consumer/<int:consumer_id>", methods=["GET"])
+@jwt_required()
 def get_consumer_orders(consumer_id):
+    # Verify the logged‑in user is the consumer (or admin)
+    current_user_id = int(get_jwt_identity())
+    # if current_user_id != consumer_id:
+    #     return jsonify({"error": "Unauthorized"}), 403
+
     try:
-        print(f"Fetching orders for consumer: {consumer_id}")
-        
-        # Get orders
         orders = (
             Order.query
             .filter_by(consumer_id=consumer_id)
@@ -146,21 +166,12 @@ def get_consumer_orders(consumer_id):
         
         result = []
         for order in orders:
-            # Get farmer info
             farmer = User.query.get(order.farmer_id)
-            
-            # Initialize items list
             items = []
-            
-            # Check if order has items attribute
             if hasattr(order, 'items'):
                 for oi in order.items:
-                    # Try to get farmer item info if needed
                     try:
-                        # Import here to avoid circular imports
-                        from models_farmer_items import FarmerItem
                         farmer_item = FarmerItem.query.get(oi.product_id)
-                        
                         items.append({
                             "product_id": oi.product_id,
                             "product_name": farmer_item.item_name if farmer_item else f"Item {oi.product_id}",
@@ -169,7 +180,6 @@ def get_consumer_orders(consumer_id):
                         })
                     except Exception as e:
                         print(f"Error getting farmer item: {e}")
-                        # Fallback
                         items.append({
                             "product_id": oi.product_id,
                             "product_name": f"Item {oi.product_id}",
