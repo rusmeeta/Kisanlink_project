@@ -1,4 +1,4 @@
-// src/pages/farmer/Dashboard.jsx - UPDATED VERSION
+// src/pages/farmer/Dashboard.jsx - UPDATED WITH API_BASE
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import {
@@ -6,6 +6,7 @@ import {
   Package, ShoppingCart, Clock, Truck, CheckCircle,
   Flag, Eye, RefreshCw
 } from "lucide-react";
+import { API_BASE } from '../api';
 
 const FarmerDashboard = () => {
   const [user, setUser] = useState(null);
@@ -20,17 +21,14 @@ const FarmerDashboard = () => {
     pendingOrders: 0
   });
   
-  // Unread counts state
   const [unreadCounts, setUnreadCounts] = useState({
     notifications: 0,
     messages: 0
   });
   
-  // Refresh states
   const [refreshingNotifications, setRefreshingNotifications] = useState(false);
   const [refreshingMessages, setRefreshingMessages] = useState(false);
   
-  // Complaint State
   const [showComplaintBox, setShowComplaintBox] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [loadingComplaint, setLoadingComplaint] = useState(false);
@@ -46,7 +44,6 @@ const FarmerDashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const API_BASE_URL = "http://localhost:5001";
   
   const getActiveTab = () => {
     const path = location.pathname;
@@ -61,16 +58,28 @@ const FarmerDashboard = () => {
   const activeTab = getActiveTab();
   const POLL_INTERVAL = 10000;
 
+  // Get token from localStorage
+  const getToken = () => localStorage.getItem('access_token');
+
   // Fetch farmer data
   const fetchFarmerData = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      const res = await fetch(`${API_BASE}/auth/me`, {
         method: "GET",
-        credentials: "include",
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
       if (res.ok) {
         const data = await res.json();
         setUser(data);
+      } else {
+        console.error("Failed to fetch user data:", res.status);
+        // If 401, redirect to login
+        if (res.status === 401) {
+          localStorage.removeItem('access_token');
+          navigate('/login');
+        }
       }
     } catch (err) {
       console.error("Error fetching farmer info:", err);
@@ -81,12 +90,12 @@ const FarmerDashboard = () => {
   const fetchUnreadNotifications = useCallback(async () => {
     try {
       setRefreshingNotifications(true);
-      const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+      const response = await fetch(`${API_BASE}/notifications/unread-count`, {
         method: 'GET',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       
@@ -108,19 +117,18 @@ const FarmerDashboard = () => {
   const fetchUnreadMessages = useCallback(async () => {
     try {
       setRefreshingMessages(true);
-      const response = await fetch(`${API_BASE_URL}/messages/farmer-conversations`, {
+      const response = await fetch(`${API_BASE}/messages/farmer-conversations`, {
         method: 'GET',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       
       if (response.ok) {
         const data = await response.json();
         if (data.status === "success") {
-          // Calculate total unread messages
           const totalUnreadMessages = (data.conversations || []).reduce(
             (total, conv) => total + (conv.unread_count || 0), 0
           );
@@ -134,7 +142,6 @@ const FarmerDashboard = () => {
     }
   }, []);
 
-  // Combined refresh function
   const refreshDashboardData = useCallback(() => {
     if (user) {
       fetchUnreadNotifications();
@@ -144,60 +151,33 @@ const FarmerDashboard = () => {
     }
   }, [user, fetchUnreadNotifications, fetchUnreadMessages]);
 
-  // Auto-refresh every 10 seconds
   useEffect(() => {
     if (!user) return;
-    
-    refreshDashboardData(); // Initial fetch
-    
-    const interval = setInterval(() => {
-      refreshDashboardData();
-    }, POLL_INTERVAL);
-    
+    refreshDashboardData();
+    const interval = setInterval(refreshDashboardData, POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [user, refreshDashboardData]);
 
-  // Refresh when page becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && user && !refreshingNotifications && !refreshingMessages) {
         refreshDashboardData();
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user, refreshingNotifications, refreshingMessages, refreshDashboardData]);
 
-  // Listen for notifications-marked-read events
   useEffect(() => {
-    const handleNotificationsMarkedRead = () => {
-      // Refresh unread notifications count
-      fetchUnreadNotifications();
-    };
-
+    const handleNotificationsMarkedRead = () => fetchUnreadNotifications();
     window.addEventListener('notifications-marked-read', handleNotificationsMarkedRead);
-    
-    return () => {
-      window.removeEventListener('notifications-marked-read', handleNotificationsMarkedRead);
-    };
+    return () => window.removeEventListener('notifications-marked-read', handleNotificationsMarkedRead);
   }, [fetchUnreadNotifications]);
 
-  // Listen for messages-marked-read events
   useEffect(() => {
-    const handleMessagesMarkedRead = () => {
-      // Refresh unread messages count
-      fetchUnreadMessages();
-    };
-
+    const handleMessagesMarkedRead = () => fetchUnreadMessages();
     window.addEventListener('messages-marked-read', handleMessagesMarkedRead);
-    
-    return () => {
-      window.removeEventListener('messages-marked-read', handleMessagesMarkedRead);
-    };
+    return () => window.removeEventListener('messages-marked-read', handleMessagesMarkedRead);
   }, [fetchUnreadMessages]);
 
   // Fetch recent orders
@@ -209,8 +189,10 @@ const FarmerDashboard = () => {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/orders/farmer/${farmerId}`, {
-        credentials: "include",
+      const response = await fetch(`${API_BASE}/orders/farmer/${farmerId}`, {
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
       
       if (!response.ok) {
@@ -223,17 +205,11 @@ const FarmerDashboard = () => {
         const sortedOrders = data.orders.sort((a, b) => 
           new Date(b.order_date) - new Date(a.order_date)
         );
-        
         setRecentOrders(sortedOrders);
-        
         const pending = sortedOrders.filter(o => 
           o.status === 'placed' || o.status === 'preparing'
         ).length;
-        
-        setStats(prev => ({
-          ...prev,
-          pendingOrders: pending
-        }));
+        setStats(prev => ({ ...prev, pendingOrders: pending }));
       }
     } catch (error) {
       console.error("Error fetching orders:", error);
@@ -246,16 +222,16 @@ const FarmerDashboard = () => {
     if (!user) return;
     setComplaintsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/complaints/my-complaints`, {
-        credentials: "include",
+      const response = await fetch(`${API_BASE}/complaints/my-complaints`, {
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
       
       const data = await response.json();
       
       if (response.ok && data.success) {
         setUserComplaints(data.complaints);
-        
-        // Calculate stats
         const stats = {
           total: data.complaints.length,
           pending: data.complaints.filter(c => c.status === 'pending').length,
@@ -284,10 +260,12 @@ const FarmerDashboard = () => {
 
     setLoadingComplaint(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/complaints/submit`, {
+      const response = await fetch(`${API_BASE}/complaints/submit`, {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${getToken()}`
+        },
         body: JSON.stringify({ complaint_text: complaintText }),
       });
 
@@ -314,10 +292,12 @@ const FarmerDashboard = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch(`${API_BASE_URL}/orders/update-status`, {
+      const response = await fetch(`${API_BASE}/orders/update-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: "include",
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
         body: JSON.stringify({
           order_id: orderId,
           farmer_id: farmerId,
@@ -343,40 +323,33 @@ const FarmerDashboard = () => {
     if (!user) return;
 
     try {
-      const productsRes = await fetch(`${API_BASE_URL}/farmer/products`, {
-        credentials: "include",
+      const productsRes = await fetch(`${API_BASE}/farmer/products`, {
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
       
       if (productsRes.ok) {
         const productsData = await productsRes.json();
         const productCount = productsData.products?.length || 0;
-        
-        setStats(prev => ({
-          ...prev,
-          totalProducts: productCount
-        }));
+        setStats(prev => ({ ...prev, totalProducts: productCount }));
       }
 
       try {
-        const ordersRes = await fetch(`${API_BASE_URL}/api/farmer/report/${user.id}`, {
-          credentials: "include",
+        const ordersRes = await fetch(`${API_BASE}/api/farmer/report/${user.id}`, {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
         });
         
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           const orderCount = ordersData.summary?.totalOrders || 0;
-          
-          setStats(prev => ({
-            ...prev,
-            totalOrders: orderCount
-          }));
+          setStats(prev => ({ ...prev, totalOrders: orderCount }));
         }
       } catch (orderErr) {
         console.error("Error fetching orders:", orderErr);
-        setStats(prev => ({
-          ...prev,
-          totalOrders: 0
-        }));
+        setStats(prev => ({ ...prev, totalOrders: 0 }));
       }
 
     } catch (err) {
@@ -387,26 +360,24 @@ const FarmerDashboard = () => {
   // Fetch recent activities
   const fetchRecentActivities = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/notifications`, {
+      const res = await fetch(`${API_BASE}/notifications`, {
         method: "GET",
-        credentials: "include",
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
       
       if (res.ok) {
         const data = await res.json();
         const notifs = data.notifications || [];
-        
-        const recentActivitiesData = notifs
-          .slice(0, 3)
-          .map((notif, idx) => ({
-            id: notif.id || idx + 1,
-            type: getActivityType(notif),
-            message: notif.message,
-            time: formatTimeAgo(notif.created_at),
-            status: getStatusFromMessage(notif.message),
-            priority: notif.is_read ? "low" : "high"
-          }));
-        
+        const recentActivitiesData = notifs.slice(0, 3).map((notif, idx) => ({
+          id: notif.id || idx + 1,
+          type: getActivityType(notif),
+          message: notif.message,
+          time: formatTimeAgo(notif.created_at),
+          status: getStatusFromMessage(notif.message),
+          priority: notif.is_read ? "low" : "high"
+        }));
         setRecentActivities(recentActivitiesData);
       }
     } catch (err) {
@@ -436,10 +407,9 @@ const FarmerDashboard = () => {
     if (!dateString) return "Just now";
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const diffMins = Math.floor((now - date) / 60000);
+    const diffHours = Math.floor((now - date) / 3600000);
+    const diffDays = Math.floor((now - date) / 86400000);
 
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
@@ -465,7 +435,6 @@ const FarmerDashboard = () => {
     fetchRecentOrders();
   }, []);
 
-  // Update when user data is loaded
   useEffect(() => {
     if (user) {
       fetchStats();
@@ -478,42 +447,20 @@ const FarmerDashboard = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await fetch(`${API_BASE}/auth/logout`, {
         method: "POST",
-        credentials: "include",
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
       });
+      localStorage.removeItem('access_token');
       window.location.href = "/login";
     } catch (err) {
       window.location.href = "/login";
     }
   };
 
-  // Handle manual refresh
-  const handleManualRefresh = () => {
-    setRefreshingNotifications(true);
-    setRefreshingMessages(true);
-    refreshDashboardData();
-    setTimeout(() => {
-      setRefreshingNotifications(false);
-      setRefreshingMessages(false);
-    }, 1000);
-  };
-
-  // Sidebar navigation items
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", path: "/farmer/dashboard" },
-    { id: "addProduct", label: "Add Product", path: "/farmer/add-product" },
-    { id: "productList", label: "Product List", path: "/farmer/products" },
-    { id: "orders", label: "Orders", path: "/farmer/orders" },
-    { id: "reports", label: "Reports", path: "/farmer/report" },
-    { 
-      id: "notifications", 
-      label: `Notifications (${unreadCounts.notifications})`, 
-      path: "/farmer/notifications" 
-    },
-  ];
-
-  // Complaint Modal Component
+  // Complaint Modal Component (keep the same)
   const ComplaintModal = () => {
     const textareaRef = React.useRef(null);
     
@@ -580,7 +527,7 @@ const FarmerDashboard = () => {
     );
   };
 
-  // Complaints List Modal
+  // Complaints List Modal (keep the same)
   const ComplaintsListModal = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
@@ -674,15 +621,12 @@ const FarmerDashboard = () => {
     </div>
   );
 
+  // Main render
   return (
     <div className="min-h-screen flex bg-gray-50">
-      {/* Complaint Modal */}
       {showComplaintBox && <ComplaintModal />}
-      
-      {/* Complaints List Modal */}
       {showComplaintsList && <ComplaintsListModal />}
       
-      {/* Report Issue Button - BOTTOM RIGHT */}
       <button
         onClick={() => setShowComplaintBox(true)}
         className="fixed bottom-6 right-6 bg-red-600 text-white p-3 rounded-full shadow-lg hover:bg-red-700 z-40 flex items-center gap-2"
@@ -692,7 +636,6 @@ const FarmerDashboard = () => {
         <span className="hidden sm:inline">Report Issue</span>
       </button>
 
-      {/* Sidebar */}
       <aside className="w-64 bg-white shadow-lg flex flex-col">
         <div className="p-6 text-center border-b">
           <div className="h-20 w-20 mx-auto rounded-full bg-green-600 flex items-center justify-center text-white text-3xl font-bold">
@@ -700,43 +643,27 @@ const FarmerDashboard = () => {
           </div>
           <h2 className="mt-3 font-bold text-lg text-gray-800">{user?.fullname || "Farmer"}</h2>
           <p className="text-sm text-gray-500 mt-1">{user?.location || ""}</p>
-          
-          
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.id}
-              to={item.path}
-              className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${
-                activeTab === item.id
-                  ? "bg-green-600 text-white shadow-md"
-                  : "text-gray-700 hover:bg-green-100"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          <Link to="/farmer/dashboard" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'dashboard' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Dashboard</Link>
+          <Link to="/farmer/add-product" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'addProduct' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Add Product</Link>
+          <Link to="/farmer/products" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'productList' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Product List</Link>
+          <Link to="/farmer/orders" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'orders' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Orders</Link>
+          <Link to="/farmer/report" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'reports' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Reports</Link>
+          <Link to="/farmer/notifications" className={`block w-full text-left px-4 py-2 rounded-lg font-semibold transition ${activeTab === 'notifications' ? "bg-green-600 text-white shadow-md" : "text-gray-700 hover:bg-green-100"}`}>Notifications ({unreadCounts.notifications})</Link>
           
-          {/* My Complaints Link */}
           <button
             onClick={() => setShowComplaintsList(true)}
             className="w-full text-left block text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-green-100 transition flex items-center justify-between"
           >
             <span>My Complaints</span>
             {complaintStats.total > 0 && (
-              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                {complaintStats.total}
-              </span>
+              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">{complaintStats.total}</span>
             )}
           </button>
           
-          {/* Messages */}
-          <Link
-            to="/farmer/messages"
-            className="block w-full text-left px-4 py-2 rounded-lg font-semibold transition text-gray-700 hover:bg-green-100 relative"
-          >
+          <Link to="/farmer/messages" className="block w-full text-left px-4 py-2 rounded-lg font-semibold transition text-gray-700 hover:bg-green-100 relative">
             Messages
             {unreadCounts.messages > 0 && (
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
@@ -747,214 +674,100 @@ const FarmerDashboard = () => {
         </nav>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 p-8 overflow-y-auto">
-        {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-green-700">
-            Welcome, {user?.fullname}!
-          </h1>
-
+          <h1 className="text-3xl font-bold text-green-700">Welcome, {user?.fullname || "Farmer"}!</h1>
           <div className="flex items-center space-x-4">
-            {/* Quick Action Buttons */}
-            
-
-            {/* View Complaints Button */}
-            <button
-              onClick={() => setShowComplaintsList(true)}
-              className="relative text-gray-700 hover:text-red-600"
-              title="View my complaints"
-            >
+            <button onClick={() => setShowComplaintsList(true)} className="relative text-gray-700 hover:text-red-600" title="View my complaints">
               <Flag className="w-6 h-6" />
               {complaintStats.pending > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                  {complaintStats.pending}
-                </span>
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">{complaintStats.pending}</span>
               )}
             </button>
-
-            {/* Notifications */}
-            <Link
-              to="/farmer/notifications"
-              className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              title={`${unreadCounts.notifications} unread notifications`}
-            >
+            <Link to="/farmer/notifications" className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm">
               <Bell className="w-6 h-6 text-green-600" />
               {unreadCounts.notifications > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.notifications > 9 ? '9+' : unreadCounts.notifications}
-                </span>
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">{unreadCounts.notifications > 9 ? '9+' : unreadCounts.notifications}</span>
               )}
             </Link>
-
-            {/* Messages */}
-            <Link
-              to="/farmer/messages"
-              className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              title={`${unreadCounts.messages} unread messages`}
-            >
+            <Link to="/farmer/messages" className="relative bg-white p-2 rounded-full hover:bg-gray-100 transition shadow-sm">
               <MessageCircle className="w-6 h-6 text-green-600" />
               {unreadCounts.messages > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                  {unreadCounts.messages > 9 ? '9+' : unreadCounts.messages}
-                </span>
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">{unreadCounts.messages > 9 ? '9+' : unreadCounts.messages}</span>
               )}
             </Link>
-
-            {/* Logout */}
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition shadow-sm"
-            >
-              Logout
-            </button>
+            <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition shadow-sm">Logout</button>
           </div>
         </div>
 
-        {/* Render Dashboard content */}
         {activeTab === "dashboard" && user ? (
           <div className="space-y-8">
-            {/* Farmer Info Card */}
             <div className="bg-white p-6 rounded-2xl shadow mb-8 flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-4">
-                <div className="h-16 w-16 rounded-full bg-green-600 flex items-center justify-center text-white text-2xl font-bold">
-                  {user.fullname[0]}
-                </div>
+                <div className="h-16 w-16 rounded-full bg-green-600 flex items-center justify-center text-white text-2xl font-bold">{user.fullname[0]}</div>
                 <div className="flex flex-col space-y-1">
                   <h2 className="text-xl font-bold text-gray-800">{user.fullname}</h2>
-                  <div className="flex items-center text-gray-600">
-                    <Mail className="w-4 h-4 mr-1 text-green-600" />
-                    <span>{user.email}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <MapPin className="w-4 h-4 mr-1 text-green-600" />
-                    <span>{user.location}</span>
-                  </div>
+                  <div className="flex items-center text-gray-600"><Mail className="w-4 h-4 mr-1 text-green-600" /><span>{user.email}</span></div>
+                  <div className="flex items-center text-gray-600"><MapPin className="w-4 h-4 mr-1 text-green-600" /><span>{user.location}</span></div>
                 </div>
               </div>
               <div className="flex items-center space-x-3 mt-4 md:mt-0">
-                <Link
-                  to="/farmer/add-product"
-                  className="flex items-center space-x-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  <Package size={16} />
-                  <span>Add Product</span>
-                </Link>
-                <Link
-                  to="/farmer/orders"
-                  className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                  <ShoppingCart size={16} />
-                  <span>View Orders</span>
-                </Link>
+                <Link to="/farmer/add-product" className="flex items-center space-x-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"><Package size={16} /><span>Add Product</span></Link>
+                <Link to="/farmer/orders" className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition"><ShoppingCart size={16} /><span>View Orders</span></Link>
               </div>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
-                <div className="flex items-center justify-between mb-3">
-                  <Package className="w-8 h-8 text-green-600" />
-                  <span className="text-sm text-gray-500">Products</span>
-                </div>
+                <div className="flex items-center justify-between mb-3"><Package className="w-8 h-8 text-green-600" /><span className="text-sm text-gray-500">Products</span></div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.totalProducts}</h3>
                 <p className="text-sm text-gray-600 mt-1">Total products</p>
               </div>
-
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
-                <div className="flex items-center justify-between mb-3">
-                  <ShoppingCart className="w-8 h-8 text-blue-600" />
-                  <span className="text-sm text-gray-500">Total Orders</span>
-                </div>
+                <div className="flex items-center justify-between mb-3"><ShoppingCart className="w-8 h-8 text-blue-600" /><span className="text-sm text-gray-500">Total Orders</span></div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.totalOrders}</h3>
                 <p className="text-sm text-gray-600 mt-1">All orders</p>
               </div>
-
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
-                <div className="flex items-center justify-between mb-3">
-                  <Clock className="w-8 h-8 text-yellow-600" />
-                  <span className="text-sm text-gray-500">New Orders</span>
-                </div>
+                <div className="flex items-center justify-between mb-3"><Clock className="w-8 h-8 text-yellow-600" /><span className="text-sm text-gray-500">New Orders</span></div>
                 <h3 className="text-2xl font-bold text-gray-800">{stats.pendingOrders}</h3>
                 <p className="text-sm text-gray-600 mt-1">Awaiting action</p>
               </div>
-
               <div className="bg-white p-6 rounded-2xl shadow hover:shadow-xl transition">
-                <div className="flex items-center justify-between mb-3">
-                  <Bell className="w-8 h-8 text-purple-600" />
-                  <span className="text-sm text-gray-500">Unread Notifications</span>
-                </div>
+                <div className="flex items-center justify-between mb-3"><Bell className="w-8 h-8 text-purple-600" /><span className="text-sm text-gray-500">Unread Notifications</span></div>
                 <h3 className="text-2xl font-bold text-gray-800">{unreadCounts.notifications}</h3>
                 <p className="text-sm text-gray-600 mt-1">Pending notifications</p>
               </div>
             </div>
 
-            {/* Recent Orders Section */}
             {recentOrders.length > 0 && (
               <div className="bg-white rounded-2xl shadow p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-bold text-gray-800">Recent Orders</h2>
-                  <Link 
-                    to="/farmer/orders"
-                    className="text-green-600 hover:text-green-700 font-medium"
-                  >
-                    View All →
-                  </Link>
+                  <Link to="/farmer/orders" className="text-green-600 hover:text-green-700 font-medium">View All →</Link>
                 </div>
-
                 <div className="space-y-4">
                   {recentOrders.slice(0, 3).map((order) => (
                     <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          order.status === 'placed' ? 'bg-blue-100' :
-                          order.status === 'preparing' ? 'bg-yellow-100' :
-                          'bg-green-100'
-                        }`}>
-                          <span className="text-lg">
-                            {order.status === 'placed' ? '🛒' :
-                             order.status === 'preparing' ? '👨‍🌾' : '✅'}
-                          </span>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${order.status === 'placed' ? 'bg-blue-100' : order.status === 'preparing' ? 'bg-yellow-100' : 'bg-green-100'}`}>
+                          <span className="text-lg">{order.status === 'placed' ? '🛒' : order.status === 'preparing' ? '👨‍🌾' : '✅'}</span>
                         </div>
                         <div>
-                          <h4 className="font-semibold text-gray-800">
-                            Order #{order.id} • ₹{order.total_price}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {order.consumer_name || `Customer ${order.consumer_id}`}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatTimeAgo(order.order_date)}
-                          </p>
+                          <h4 className="font-semibold text-gray-800">Order #{order.id} • ₹{order.total_price}</h4>
+                          <p className="text-sm text-gray-600">{order.consumer_name || `Customer ${order.consumer_id}`}</p>
+                          <p className="text-xs text-gray-500">{formatTimeAgo(order.order_date)}</p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center space-x-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          order.status === 'placed' ? 'bg-blue-100 text-blue-800' :
-                          order.status === 'preparing' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.status === 'placed' ? 'bg-blue-100 text-blue-800' : order.status === 'preparing' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
                           {order.status.toUpperCase()}
                         </span>
-                        
-                        {/* Simple Status Update Buttons */}
                         {order.status === 'placed' && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, 'preparing')}
-                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm"
-                          >
-                            Start Preparing
-                          </button>
+                          <button onClick={() => updateOrderStatus(order.id, 'preparing')} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">Start Preparing</button>
                         )}
-                        
                         {order.status === 'preparing' && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, 'ready')}
-                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
-                          >
-                            Mark Ready
-                          </button>
+                          <button onClick={() => updateOrderStatus(order.id, 'ready')} className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">Mark Ready</button>
                         )}
                       </div>
                     </div>
@@ -963,91 +776,51 @@ const FarmerDashboard = () => {
               </div>
             )}
 
-            {/* Recent Activities */}
             <div className="bg-white rounded-2xl shadow p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-gray-800">Recent Activities</h2>
                 <span className="text-sm text-green-600 font-medium">Showing 3 latest</span>
               </div>
-
               <div className="space-y-4">
                 {recentActivities.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="text-gray-400 text-4xl mb-4">📋</div>
-                    <p className="text-gray-500">No recent activities</p>
-                  </div>
+                  <div className="text-center py-8"><div className="text-gray-400 text-4xl mb-4">📋</div><p className="text-gray-500">No recent activities</p></div>
                 ) : (
                   recentActivities.map((activity) => (
                     <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          activity.type === 'order' ? 'bg-blue-100' :
-                          activity.type === 'message' ? 'bg-green-100' :
-                          activity.type === 'product' ? 'bg-yellow-100' :
-                          'bg-gray-100'
-                        }`}>
-                          <span className={`text-sm ${
-                            activity.type === 'order' ? 'text-blue-600' :
-                            activity.type === 'message' ? 'text-green-600' :
-                            activity.type === 'product' ? 'text-yellow-600' :
-                            'text-gray-600'
-                          }`}>
-                            {activity.type === 'order' ? '📦' :
-                             activity.type === 'message' ? '💬' :
-                             activity.type === 'product' ? '📝' : '🔔'}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.type === 'order' ? 'bg-blue-100' : activity.type === 'message' ? 'bg-green-100' : activity.type === 'product' ? 'bg-yellow-100' : 'bg-gray-100'}`}>
+                          <span className={`text-sm ${activity.type === 'order' ? 'text-blue-600' : activity.type === 'message' ? 'text-green-600' : activity.type === 'product' ? 'text-yellow-600' : 'text-gray-600'}`}>
+                            {activity.type === 'order' ? '📦' : activity.type === 'message' ? '💬' : activity.type === 'product' ? '📝' : '🔔'}
                           </span>
                         </div>
                         <div className="flex-1">
                           <h4 className="font-semibold text-gray-800">{activity.message}</h4>
-                          <div className="flex items-center mt-1">
-                            <span className="text-xs px-2 py-1 rounded-full capitalize bg-gray-200 text-gray-700">
-                              {activity.type}
-                            </span>
-                          </div>
+                          <div className="flex items-center mt-1"><span className="text-xs px-2 py-1 rounded-full capitalize bg-gray-200 text-gray-700">{activity.type}</span></div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Clock className="w-3 h-3 mr-1" />
-                          <span>{activity.time}</span>
-                        </div>
-                      </div>
+                      <div className="text-right"><div className="flex items-center text-sm text-gray-500"><Clock className="w-3 h-3 mr-1" /><span>{activity.time}</span></div></div>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-green-800 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Link
-                  to="/farmer/add-product"
-                  className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex flex-col items-center justify-center text-center"
-                >
-                  <Package className="w-6 h-6 mb-2" />
-                  <span className="font-medium">Add Product</span>
+                <Link to="/farmer/add-product" className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex flex-col items-center justify-center text-center">
+                  <Package className="w-6 h-6 mb-2" /><span className="font-medium">Add Product</span>
                 </Link>
-                <Link
-                  to="/farmer/orders"
-                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
-                >
-                  <ShoppingCart className="w-6 h-6 mb-2" />
-                  <span className="font-medium">Manage Orders</span>
+                <Link to="/farmer/orders" className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center">
+                  <ShoppingCart className="w-6 h-6 mb-2" /><span className="font-medium">Manage Orders</span>
                 </Link>
-                <Link
-                  to="/farmer/messages"
-                  className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center"
-                >
-                  <MessageCircle className="w-6 h-6 mb-2" />
-                  <span className="font-medium">Messages</span>
+                <Link to="/farmer/messages" className="bg-white text-green-600 border border-green-600 py-3 px-4 rounded-lg hover:bg-green-50 transition flex flex-col items-center justify-center text-center">
+                  <MessageCircle className="w-6 h-6 mb-2" /><span className="font-medium">Messages</span>
                 </Link>
               </div>
             </div>
           </div>
         ) : (
-          // Render nested routes
           <Outlet />
         )}
       </main>
