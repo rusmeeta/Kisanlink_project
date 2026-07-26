@@ -32,6 +32,7 @@ class CartItem(db.Model):
 
 class Order(db.Model):
     __tablename__ = "orders"
+    __table_args__ = {'extend_existing': True} 
 
     id = db.Column(db.Integer, primary_key=True)
     consumer_id = db.Column(db.Integer)
