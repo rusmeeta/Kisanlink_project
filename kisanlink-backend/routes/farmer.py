@@ -294,38 +294,34 @@ def add_product():
         print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-@farmer_bp.route("/products", methods=["GET"])
+@farmer_bp.route('/products', methods=['GET'])
 @jwt_required()
 def get_products():
-    try:
-        farmer_id = get_jwt_identity()
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT id, item_name, price, photo_path, location, min_order_qty, available_stock, status, latitude, longitude
-            FROM farmer_items
-            WHERE farmer_id=%s
-        """, (farmer_id,))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        products = [
-            {
-                "id": r[0],
-                "item_name": r[1],
-                "price": r[2],
-                "photo_path": r[3],
-                "location": r[4],
-                "min_order_qty": r[5],
-                "available_stock": r[6],
-                "status": r[7],
-                "latitude": r[8],
-                "longitude": r[9]
-            } for r in rows
-        ]
-        return jsonify({"products": products}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    farmer_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, item_name, price, photo_path, location, 
+               min_order_qty, available_stock, status
+        FROM farmer_items
+        WHERE farmer_id = %s
+    """, (farmer_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    products = []
+    for row in rows:
+        products.append({
+            'id': row[0],
+            'item_name': row[1],
+            'price': row[2],
+            'photo_path': row[3],
+            'location': row[4],
+            'min_order_qty': row[5],
+            'available_stock': row[6],
+            'status': row[7] if len(row) > 7 else 'approved'
+        })
+    return jsonify({'products': products}), 200
 
 # ==================== TEST ENDPOINTS ====================
 

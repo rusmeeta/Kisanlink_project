@@ -1,33 +1,38 @@
-# app.py - FINAL PRODUCTION VERSION (WITH JWT)
 import os
-import sys
 import re
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager  # <--- NEW IMPORT
+from flask_jwt_extended import JWTManager, verify_jwt_in_request
 
-# ------------------------------
-# LOAD .ENV
-# ------------------------------
-print("\n" + "="*60)
-print("🚀 KISANLINK BACKEND STARTING")
-print("="*60)
-
+# Load .env
 PROJECT_ROOT = Path(__file__).resolve().parent
-print(f"📁 PROJECT ROOT: {PROJECT_ROOT}")
-
 env_path = PROJECT_ROOT / ".env"
 if env_path.exists():
     load_dotenv(env_path)
-    print("✅ .env file LOADED!")
-else:
-    print("❌ .env file NOT FOUND at that location!")
 
-# ------------------------------
-# IMPORT MODULES
-# ------------------------------
+app = Flask(__name__)
+app.url_map.strict_slashes = False   # ← fixes CORS preflight redirect
+
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
+app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
+jwt = JWTManager(app)
+
+# CORS – allow Vercel
+CORS(app,
+     origins=[
+         "https://kisanlink-project-l21nkd7bb-rusmeetas-projects.vercel.app",
+         "https://kisanlink-project.vercel.app",
+         re.compile(r"^https://.*\.vercel\.app$"),
+         "http://localhost:3000",
+         "http://localhost:5001"
+     ],
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     allow_headers=["Content-Type", "Authorization", "Accept"])
+
+# Import blueprints
 from config import Config
 from extensions import db
 from routes.auth import auth_bp
@@ -44,105 +49,61 @@ from routes.simple_messages import simple_bp
 from routes.admin import admin_bp
 from routes.complaints import complaints_bp
 
+# Register blueprints
+app.register_blueprint(auth_bp, url_prefix='/auth')
+app.register_blueprint(farmer_bp, url_prefix='/farmer')
+app.register_blueprint(report_bp)
+app.register_blueprint(consumer_bp, url_prefix='/consumer')
+app.register_blueprint(order_bp, url_prefix='/orders')
+app.register_blueprint(recommend_bp, url_prefix='/recommend')
+app.register_blueprint(products_bp, url_prefix='/products')
+app.register_blueprint(cart_bp, url_prefix='/cart')
+app.register_blueprint(notifications_bp, url_prefix='/notifications')
+app.register_blueprint(messages_bp, url_prefix='/messages')
+app.register_blueprint(simple_bp, url_prefix='/simple')
+app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(complaints_bp, url_prefix='/complaints')
 
+# Global JWT protection – only these endpoints are public
+PUBLIC_ENDPOINTS = ['/auth/login', '/auth/signup', '/', '/debug-env', '/test-email', '/uploads']
+@app.before_request
+def jwt_global_protection():
+    for endpoint in PUBLIC_ENDPOINTS:
+        if request.path.startswith(endpoint):
+            return
+    if request.method == 'OPTIONS':
+        return
+    try:
+        verify_jwt_in_request()
+    except Exception:
+        return jsonify({'error': 'Missing or invalid token'}), 401
 
-
-
-# ------------------------------
-# INIT FLASK APP
-# ------------------------------
-app = Flask(__name__)
-app.config.from_object(Config)
-app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
-
-app.url_map.strict_slashes = False 
-
-# ========== JWT CONFIGURATION (ADD THESE 3 LINES) ==========
-app.config['JWT_SECRET_KEY'] = os.getenv("SECRET_KEY", "supersecretkey")
-jwt = JWTManager(app)  # <--- THIS INITIALIZES JWT
-# ============================================================
-
-# Session config (keep for now, but JWT handles auth)
-app.config.update(
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=True,
-)
-
-# CORS – keep for local development
-CORS(app, 
-     origins=[
-         re.compile(r"^https://.*\.vercel\.app$"),
-         re.compile(r"^http://localhost:\d+$")
-     ],
-     supports_credentials=True,
-     methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization", "Accept"],
-     expose_headers=["Content-Type", "Authorization"])
-
-# Init DB
-db.init_app(app)
-
-# Upload folder
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-@app.route("/uploads/<filename>")
+# Uploads
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+@app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# ------------------------------
-# REGISTER BLUEPRINTS
-# ------------------------------
-app.register_blueprint(auth_bp, url_prefix="/auth")
-app.register_blueprint(farmer_bp, url_prefix="/farmer")
-app.register_blueprint(report_bp)
-app.register_blueprint(consumer_bp, url_prefix="/consumer")
-app.register_blueprint(order_bp, url_prefix="/orders")
-app.register_blueprint(recommend_bp, url_prefix="/recommend")
-app.register_blueprint(products_bp, url_prefix="/products")
-app.register_blueprint(cart_bp, url_prefix="/cart")
-app.register_blueprint(notifications_bp, url_prefix="/notifications")
-app.register_blueprint(messages_bp, url_prefix="/messages")
-app.register_blueprint(simple_bp, url_prefix="/simple")
-app.register_blueprint(admin_bp, url_prefix="/admin")
-app.register_blueprint(complaints_bp, url_prefix="/complaints")
-
-# ------------------------------
-# DATABASE SYNC (Auto-verify columns)
-# ------------------------------
+# DB sync – ensures columns exist
 try:
     from db import get_db_connection
     conn = get_db_connection()
     cur = conn.cursor()
-    print("🧹 Synchronizing missing columns...")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")  # if needed
     cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
+    # Also ensure farmer_items has status column
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved';")
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Database sync complete.")
+    print("✅ DB sync complete.")
 except Exception as e:
     print(f"⚠️ DB sync notice: {e}")
 
-# ------------------------------
-# SERVE REACT FRONTEND (Catch-all)
-# ------------------------------
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react(path):
-    # If the path is for a static asset (like .js, .css, .png), serve it from the static folder
-    if path and (path.startswith('static/') or '.' in path):
-        return send_from_directory('static', path)
-    # For any other route, serve index.html so React Router handles it
-    return send_from_directory('static', 'index.html')
-
-# ------------------------------
-# RUN APP
-# ------------------------------
-if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("🚀 STARTING SERVER ON PORT 5001")
-    print("="*60)
+if __name__ == '__main__':
     app.run(debug=True, port=5001)
