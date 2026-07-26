@@ -140,12 +140,18 @@ app.config.from_object(Config)
 app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
 # CORS
-CORS(app, 
-     origins=["http://localhost:3000", "http://localhost:3001"], 
+import re
+
+CORS(app,
+     origins=[
+         "https://kisanlink-project-2d21w4tn6-rusmeetas-projects.vercel.app",  # your exact Vercel URL
+         re.compile(r"^https://.*\.vercel\.app$"),  # all Vercel subdomains
+         "http://localhost:3000",
+         "http://localhost:5001"
+     ],
      supports_credentials=True,
-     methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization", "Accept"],
-     expose_headers=["Content-Type", "Authorization"])
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     allow_headers=["Content-Type", "Authorization", "Accept"])
 
 # Initialize database
 db.init_app(app)
