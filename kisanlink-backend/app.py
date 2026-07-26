@@ -292,13 +292,36 @@ with app.app_context():
 # ------------------------------
 # RUN APP (Used for local laptop testing only)
 # ------------------------------
+# ------------------------------
+# RUN APP & AUTO-FIX COLUMNS
+# ------------------------------
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("🚀 STARTING SERVER ON PORT 5001")
     print("="*60)
-    print("📧 Test email service: http://localhost:5001/test-email")
-    print("🔧 Debug environment: http://localhost:5001/debug-env")
-    print("🌐 API running: http://localhost:5001")
-    print("="*60 + "\n")
     
+    # 🚀 AUTOMATED COLUMNS REPAIR: Adds the missing fields instantly to the database
+    try:
+        from db import get_db_connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Inject the columns your login and signup are crashing on
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
+        
+        # Make sure any existing accounts are automatically verified and active
+        cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ SUCCESS: Database layout columns synchronized perfectly!")
+    except Exception as db_err:
+        print(f"⚠️ Database column synchronization note: {db_err}")
+        
+    print("="*60 + "\n")
     app.run(debug=True, port=5001)
