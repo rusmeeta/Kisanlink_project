@@ -1,3 +1,4 @@
+
 // Login.jsx - Updated with proper redirection
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,17 +34,14 @@ function Login() {
       const data = await response.json();
       console.log("Login response:", data);
 
-      if (response.status === 200 && data.success) {
-        // ✅ LOGIN SUCCESSFUL - Redirect based on user_type
-        const userType = data.user_type;
-        
-        // Store user info in localStorage or context
+      if (response.status === 200 && data.user) {
+        const userType = data.user.user_type;
+
         localStorage.setItem("userType", userType);
-        localStorage.setItem("userName", data.fullname);
-        localStorage.setItem("userId", data.user_id);
-        
-        // Redirect based on user type
-        switch(userType) {
+        localStorage.setItem("userName", data.user.fullname);
+        localStorage.setItem("userId", data.user.id);
+
+        switch (userType) {
           case "farmer":
             navigate("/farmer/dashboard");
             break;
@@ -56,15 +54,13 @@ function Login() {
           default:
             navigate("/dashboard");
         }
-        
+
       } else if (response.status === 403 && data.needs_verification) {
-        // ❌ Email not verified
         setNeedsVerification(true);
         setUserEmail(formData.email);
         setError("Please verify your email before logging in.");
-        
+
       } else {
-        // ❌ Other errors
         setError(data.error || "Login failed. Please check your credentials.");
       }
     } catch (err) {
@@ -83,16 +79,16 @@ function Login() {
         return;
       }
 
-      const response = await fetch("http://localhost:5001/auth/resend-verification", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToResend })
       });
-      
+
       const data = await response.json();
       if (response.ok && data.success) {
-        alert("✅ Verification email has been resent! Please check your inbox.");
-        setError(""); // Clear error
+        alert("Verification email has been resent! Please check your inbox.");
+        setError("");
       } else {
         setError(data.error || "Failed to resend verification email");
       }
@@ -144,30 +140,21 @@ function Login() {
             type="submit"
             disabled={isLoading}
             className={`w-full py-3 rounded-md font-semibold text-white transition ${
-              isLoading 
-                ? "bg-gray-400 cursor-not-allowed" 
+              isLoading
+                ? "bg-gray-400 cursor-not-allowed"
                 : "bg-green-600 hover:bg-green-700"
             }`}
           >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Logging in...
-              </span>
-            ) : "Login"}
+            {isLoading ? "Logging in..." : "Login"}
           </button>
         </form>
 
-        {/* Error Messages */}
         {error && (
-          <div className={`mt-4 p-3 rounded-md ${needsVerification ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'}`}>
-            <p className={`font-medium ${needsVerification ? 'text-yellow-700' : 'text-red-600'}`}>
+          <div className={`mt-4 p-3 rounded-md ${needsVerification ? "bg-yellow-50 border border-yellow-200" : "bg-red-50 border border-red-200"}`}>
+            <p className={`font-medium ${needsVerification ? "text-yellow-700" : "text-red-600"}`}>
               {error}
             </p>
-            
+
             {needsVerification && (
               <div className="mt-3">
                 <button
@@ -177,14 +164,13 @@ function Login() {
                   Resend Verification Email
                 </button>
                 <p className="text-xs text-gray-600 mt-2">
-                  Check your spam folder if you don't see the email.
+                  Check your spam folder if you do not see the email.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Signup Link */}
         <div className="mt-6 pt-6 border-t border-gray-200">
           <p className="text-center text-gray-600">
             Don't have an account?{" "}
