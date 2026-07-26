@@ -1,7 +1,7 @@
 // src/api.js
 import axios from 'axios';
+export const API_BASE = "https://kisanlink-project.onrender.com";
 
-export const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
 // Create an Axios instance with base URL
 const apiClient = axios.create({
