@@ -3,7 +3,6 @@ import re
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory, request, jsonify
-from flask_cors import CORS
 from flask_jwt_extended import JWTManager, verify_jwt_in_request
 
 # Load .env
@@ -19,22 +18,9 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
 app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')
 jwt = JWTManager(app)
 
-# ---------- CORS ----------
-CORS(app,
-     origins=[
-         # Add your exact Vercel URL (copy from browser)
-         "https://kisanlink-project-5kjkkhxet-rusmeetas-projects.vercel.app",
-         re.compile(r"^https://.*\.vercel\.app$"),
-         "http://localhost:3000",
-         "http://localhost:5001"
-     ],
-     supports_credentials=True,
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-     allow_headers=["Content-Type", "Authorization", "Accept"])
-
-# ---------- EXPLICIT CORS HEADERS (FALLBACK) ----------
+# ---------- MANUAL CORS (BULLETPROOF) ----------
 @app.after_request
-def add_cors_headers(response):
+def after_request(response):
     origin = request.headers.get('Origin')
     if origin:
         # Allow any Vercel origin or localhost
@@ -49,6 +35,17 @@ def add_cors_headers(response):
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
     return response
+
+# Also handle OPTIONS requests explicitly (for preflight)
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def options_handler(path):
+    response = jsonify({})
+    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+    return response, 200
 
 # Import blueprints
 from config import Config
@@ -67,7 +64,6 @@ from routes.simple_messages import simple_bp
 from routes.admin import admin_bp
 from routes.complaints import complaints_bp
 
-# Register blueprints
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(farmer_bp, url_prefix='/farmer')
 app.register_blueprint(report_bp)
