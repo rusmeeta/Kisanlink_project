@@ -34,7 +34,6 @@ const AdminLogin = () => {
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('adminLoggedIn', 'true');
         localStorage.setItem('adminName', data.user?.fullname || 'Admin');
-        localStorage.setItem('adminEmail', email);
         navigate('/admin/dashboard');
       } else {
         setError(data.error || 'Invalid admin credentials');
