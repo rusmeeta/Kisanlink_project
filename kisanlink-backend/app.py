@@ -141,18 +141,19 @@ app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
 # CORS
 # CORS - Updated with your real Vercel links
+# CORS - Dynamic pattern matching for all local and Vercel subdomains
+import re
+
 CORS(app, 
      origins=[
-         "http://localhost:3000", 
-         "http://localhost:3001",
-         "https://kisanlink-project-two.vercel.app",
-         "https://kisanlink-project-28ny22554-rusmeetas-projects.vercel.app",
-         "https://kisanlink-project-hauapd0q9-rusmeetas-projects.vercel.app"
-     ], 
+         re.compile(r"^https://.*\.vercel\.app$"),
+         re.compile(r"^http://localhost:\d+$")
+     ],
      supports_credentials=True,
      methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization", "Accept"],
      expose_headers=["Content-Type", "Authorization"])
+
 
 # Initialize database
 db.init_app(app)
