@@ -1,4 +1,4 @@
-# routes/auth.py - PRODUCTION COMPATIBLE VERSION WITH AUTO-VERIFICATION
+# routes/auth.py - FINAL PRODUCTION COMPATIBLE VERSION
 from flask import Blueprint, request, jsonify, session
 from db import get_db_connection
 import re
@@ -83,12 +83,10 @@ def signup():
             lat, lon = location_coords[location]
             verification_token = secrets.token_hex(32)
             
-            # 🚀 PRODUCTION OVERRIDE PATCH:
-            # We explicitly insert 'is_email_verified = TRUE' and 'is_active = TRUE' right into the row query.
-            # This completely bypasses the SMTP checkpoint block while keeping your exact layout intact!
+            # Note: We match the column name to password_hash here to avoid errors
             insert_query = """
                 INSERT INTO users (
-                    fullname, email, password, location, latitude, longitude, 
+                    fullname, email, password_hash, location, latitude, longitude, 
                     user_type, verification_token, is_email_verified, is_active, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, TRUE, %s)
                 RETURNING id;
@@ -99,10 +97,9 @@ def signup():
                 user_type, verification_token, datetime.utcnow()
             ))
             
-            new_user_id = cur.fetchone()[0]
+            new_user_id = cur.fetchone()
             conn.commit()
             
-            # Return success message immediately to front-end dashboard interfaces
             return jsonify({
                 "message": "Account created successfully! Auto-verified for cloud production access.",
                 "user_id": new_user_id,
@@ -138,8 +135,9 @@ def login():
         cur = conn.cursor()
         
         try:
+            # Fixed column target from 'password' to 'password_hash' to align with postgres schemas
             cur.execute("""
-                SELECT id, fullname, password, user_type, is_active, is_email_verified 
+                SELECT id, fullname, password_hash, user_type, is_active, is_email_verified 
                 FROM users WHERE email = %s
             """, (email,))
             user = cur.fetchone()
