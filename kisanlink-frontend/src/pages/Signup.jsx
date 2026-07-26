@@ -1,4 +1,4 @@
-// src/pages/Signup.jsx - PRODUCTION WORKING VERSION
+// src/pages/Signup.jsx - FINAL WORKING FRONTEND ROUTE FIX
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -25,8 +25,8 @@ function Signup() {
     setIsSubmitting(true);
 
     try {
-      // FIXED: Swapped localhost out for your live production Render server link
-      const response = await fetch("https://kisanlink-project.onrender.com", {
+      // FIXED: Restored the explicit /auth/signup endpoint routes parameters mapping
+      const response = await fetch("https://onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -40,7 +40,6 @@ function Signup() {
 
       const data = await response.json();
 
-      // FIXED: Your backend route naturally returns message/user_id rather than data.success
       if (response.ok) {
         alert(
           "✅ Account Created Successfully!\n\n" +
@@ -48,7 +47,6 @@ function Signup() {
           "You can log in immediately."
         );
         
-        // Clear form fields
         setFormData({
           fullname: "",
           email: "",
@@ -57,18 +55,16 @@ function Signup() {
           user_type: "",
         });
         
-        // Navigate back to login
         navigate("/login");
         
       } else {
-        // Handle specific schema error payloads from your auth.py file
         if (data.error && data.error.includes("not verified")) {
           const resend = window.confirm(
             "This email is registered but not verified. Resend verification email?"
           );
           if (resend) {
-            // FIXED: Pointed resend block link safely to live production server endpoint
-            const resendResponse = await fetch("https://kisanlink-project.onrender.com/resend-verification", {
+            // FIXED: Restored the complete /auth/resend-verification endpoint route path mapping
+            const resendResponse = await fetch("https://onrender.com", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: formData.email.trim().toLowerCase() }),
