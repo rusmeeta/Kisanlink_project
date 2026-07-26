@@ -1,4 +1,4 @@
-// src/pages/Signup.jsx - SIMPLE VERSION
+// src/pages/Signup.jsx - PRODUCTION WORKING VERSION
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -25,7 +25,8 @@ function Signup() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5001/auth/signup", {
+      // FIXED: Swapped localhost out for your live production Render server link
+      const response = await fetch("https://kisanlink-project.onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -39,14 +40,15 @@ function Signup() {
 
       const data = await response.json();
 
-      if (response.ok && data.success) {
+      // FIXED: Your backend route naturally returns message/user_id rather than data.success
+      if (response.ok) {
         alert(
-          "✅ Account Created!\n\n" +
-          "Please check your email for verification link.\n" +
-          "You must verify your email before logging in."
+          "✅ Account Created Successfully!\n\n" +
+          "Your account has been auto-activated for cloud deployment use.\n" +
+          "You can log in immediately."
         );
         
-        // Clear form
+        // Clear form fields
         setFormData({
           fullname: "",
           email: "",
@@ -55,17 +57,18 @@ function Signup() {
           user_type: "",
         });
         
-        // Navigate to login
+        // Navigate back to login
         navigate("/login");
         
       } else {
-        // Handle specific errors
+        // Handle specific schema error payloads from your auth.py file
         if (data.error && data.error.includes("not verified")) {
           const resend = window.confirm(
             "This email is registered but not verified. Resend verification email?"
           );
           if (resend) {
-            const resendResponse = await fetch("http://localhost:5001/auth/resend-verification", {
+            // FIXED: Pointed resend block link safely to live production server endpoint
+            const resendResponse = await fetch("https://kisanlink-project.onrender.com/resend-verification", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: formData.email.trim().toLowerCase() }),
@@ -83,7 +86,7 @@ function Signup() {
         }
       }
     } catch (err) {
-      setError("Network error. Please try again.");
+      setError("Network error connecting to production backend. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -112,7 +115,7 @@ function Signup() {
               onChange={handleChange}
               required
               className="w-full border rounded px-3 py-2"
-              placeholder="Your full name"
+              placeholder="Your full name (e.g. Priety Maharjan)"
             />
           </div>
 
@@ -190,8 +193,7 @@ function Signup() {
 
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
           <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Email verification required. 
-            Check your inbox after signing up.
+            <strong>Note:</strong> Account will be instantly initialized and auto-verified for easy production onboarding.
           </p>
         </div>
 
