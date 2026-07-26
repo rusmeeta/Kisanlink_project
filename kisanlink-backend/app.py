@@ -276,17 +276,23 @@ def index():
         }
     }
 
+# 🚀 CRITICAL FOR PRODUCTION DEPLOYMENT:
+# Moving this code here ensures Gunicorn executes it on boot in Render,
+# automatically building all missing tables in your empty cloud database.
+with app.app_context():
+    try:
+        db.create_all()
+        print("✅ Render cloud database tables synchronized and ready!")
+    except Exception as e:
+        print(f"⚠️ Cloud table generation status note: {e}")
+
 # ------------------------------
-# RUN APP
+# RUN APP (Used for local laptop testing only)
 # ------------------------------
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("🚀 STARTING SERVER ON PORT 5001")
     print("="*60)
-    
-    with app.app_context():
-        db.create_all()
-    
     print("📧 Test email service: http://localhost:5001/test-email")
     print("🔧 Debug environment: http://localhost:5001/debug-env")
     print("🌐 API running: http://localhost:5001")
