@@ -1,16 +1,15 @@
+import os
 import psycopg2
-from flask_sqlalchemy import SQLAlchemy
-db = SQLAlchemy()
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 def get_db_connection():
-    try:
-        conn = psycopg2.connect(
-            host="localhost",
-            database="kisanlink_db",
-            user="kisanlink_user",
-            password="password123"
-        )
-        return conn
-    except Exception as e:
-        print(f"Database connection error: {e}")
+    database_url = os.getenv('DATABASE_URL')
+    if not database_url:
+        print("⚠️ DATABASE_URL not set, returning None")
         return None
+    return psycopg2.connect(database_url)
+
+# Optional: create engine if needed
+engine = create_engine(os.getenv('DATABASE_URL')) if os.getenv('DATABASE_URL') else None
+db_session = scoped_session(sessionmaker(bind=engine)) if engine else None
