@@ -85,7 +85,7 @@ const checkAdminAuth = async () => {
   
   // Try to verify with backend
   try {
-    const response = await axios.get("http://localhost:5001/admin/check-auth", {
+    const response = await axios.get(API_BASE/admin/check-auth", {
       withCredentials: true
     });
 
@@ -104,7 +104,7 @@ const checkAdminAuth = async () => {
 };
   const loadEditRequests = async () => {
     try {
-      const response = await axios.get("http://localhost:5001/admin/edit-requests/pending", {
+      const response = await axios.get(API_BASE/admin/edit-requests/pending", {
         withCredentials: true
       });
       if (response.data.success) {
@@ -121,7 +121,7 @@ const checkAdminAuth = async () => {
       
       // First check if we're authenticated
       try {
-        const authCheck = await axios.get("http://localhost:5001/admin/check-auth", {
+        const authCheck = await axios.get(API_BASE/admin/check-auth", {
           withCredentials: true
         });
         console.log("Auth check:", authCheck.data);
@@ -129,7 +129,7 @@ const checkAdminAuth = async () => {
         console.log("Auth check failed, might not be admin");
       }
       
-      const response = await axios.get("http://localhost:5001/complaints/admin/all", {
+      const response = await axios.get(API_BASE/complaints/admin/all", {
         withCredentials: true
       });
       console.log("Complaints API Response:", response.data);
@@ -142,7 +142,7 @@ const checkAdminAuth = async () => {
         console.error("API returned success=false:", response.data);
         // Try the simple endpoint as fallback
         try {
-          const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
+          const simpleResponse = await axios.get(API_BASE/complaints/simple-test", {
             withCredentials: true
           });
           if (simpleResponse.data.success) {
@@ -162,7 +162,7 @@ const checkAdminAuth = async () => {
       
       // Try fallback to simple endpoint
       try {
-        const simpleResponse = await axios.get("http://localhost:5001/complaints/simple-test", {
+        const simpleResponse = await axios.get(API_BASE/complaints/simple-test", {
           withCredentials: true
         });
         if (simpleResponse.data.success) {
@@ -181,7 +181,7 @@ const checkAdminAuth = async () => {
       setLoading(true);
       
       // Load dashboard stats
-      const statsResponse = await axios.get("http://localhost:5001/admin/stats", {
+      const statsResponse = await axios.get(API_BASE/admin/stats", {
         withCredentials: true
       });
       
@@ -190,13 +190,13 @@ const checkAdminAuth = async () => {
       }
 
       // Load recent farmers
-      const farmersResponse = await axios.get("http://localhost:5001/admin/recent-farmers", {
+      const farmersResponse = await axios.get(API_BASE/admin/recent-farmers", {
         withCredentials: true
       });
       setRecentFarmers(farmersResponse.data.farmers || []);
 
       // Load recent products
-      const productsResponse = await axios.get("http://localhost:5001/admin/recent-products", {
+      const productsResponse = await axios.get(API_BASE/admin/recent-products", {
         withCredentials: true
       });
       setRecentProducts(productsResponse.data.products || []);
@@ -297,7 +297,7 @@ const checkAdminAuth = async () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5001/admin/logout", {}, {
+      await axios.post(API_BASE/admin/logout", {}, {
         withCredentials: true
       });
     } finally {

@@ -23,7 +23,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5001/auth/login", {
+      const response = await fetch(API_BASE/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -83,7 +83,7 @@ function Login() {
         return;
       }
 
-      const response = await fetch("http://localhost:5001/auth/resend-verification", {
+      const response = await fetch(API_BASE/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToResend })

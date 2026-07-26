@@ -35,7 +35,7 @@ function Report() {
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get("http://localhost:5001/farmer/me", {
+        const res = await axios.get(API_BASE/farmer/me", {
           withCredentials: true
         });
         setFarmerId(res.data.id);

@@ -172,7 +172,7 @@ const handleAdminLogin = async (e) => {
 
   try {
     // Call your backend admin login endpoint
-    const response = await fetch("http://localhost:5001/admin/login", {
+    const response = await fetch(API_BASE/admin/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -39,7 +39,7 @@ const Dashboard = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshingMessages, setRefreshingMessages] = useState(false);
   const [refreshingNotifications, setRefreshingNotifications] = useState(false);
-  const API_BASE_URL = "http://localhost:5001";
+  const API_BASE_URL = API_BASE";
 
   // Fetch logged-in user
   useEffect(() => {

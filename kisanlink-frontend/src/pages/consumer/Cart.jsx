@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const DELIVERY_PER_FARMER = 50;
-const BACKEND_URL = "http://localhost:5001";
+const BACKEND_URL = API_BASE";
 
 const Cart = () => {
   const navigate = useNavigate();

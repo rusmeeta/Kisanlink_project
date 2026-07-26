@@ -10,7 +10,7 @@ const FarmerMessages = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const navigate = useNavigate();
-  const API_BASE_URL = "http://localhost:5001";
+  const API_BASE_URL = API_BASE";
 
   const fetchConversations = useCallback(async () => {
     try {

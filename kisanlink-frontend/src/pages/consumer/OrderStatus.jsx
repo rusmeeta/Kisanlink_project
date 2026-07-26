@@ -72,7 +72,7 @@ const OrderStatus = () => {
     try {
       const userId = localStorage.getItem("userId");
       
-      const response = await fetch("http://localhost:5001/orders/cancel", {
+      const response = await fetch(API_BASE/orders/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

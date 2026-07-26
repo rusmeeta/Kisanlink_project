@@ -37,7 +37,7 @@ const FarmerOrdersPage = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch("http://localhost:5001/orders/update-status", {
+      const response = await fetch(API_BASE/orders/update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -36,8 +36,8 @@ const ProductList = ({ isAdmin = false }) => {
     setLoading(true);
     try {
       const url = isAdmin 
-        ? "http://localhost:5001/admin/products"
-        : "http://localhost:5001/farmer/products";
+        ? API_BASE/admin/products"
+        : API_BASE/farmer/products";
       
       const res = await axios.get(url, { withCredentials: true });
       

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Bell, RefreshCw, ArrowLeft, MessageCircle, ShoppingCart, Check } from 'lucide-react';
 
-const BACKEND_URL = "http://localhost:5001";
+const BACKEND_URL = API_BASE";
 
 const ConsumerNotifications = () => {
   const [notifications, setNotifications] = useState([]);

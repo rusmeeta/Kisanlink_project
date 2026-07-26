@@ -10,7 +10,7 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch("http://localhost:5001/auth/me", {
+        const response = await fetch(API_BASE/auth/me", {
           credentials: "include",
         });
         

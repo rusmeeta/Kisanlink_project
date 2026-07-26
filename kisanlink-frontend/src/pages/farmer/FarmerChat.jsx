@@ -17,7 +17,7 @@ const FarmerChat = () => {
   // Fetch current farmer info
   const fetchFarmer = async () => {
     try {
-      const res = await fetch("http://localhost:5001/farmer/me", {
+      const res = await fetch(API_BASE/farmer/me", {
         credentials: "include",
       });
       if (res.ok) {

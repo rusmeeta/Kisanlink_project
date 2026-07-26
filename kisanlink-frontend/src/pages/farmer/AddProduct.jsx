@@ -29,7 +29,7 @@ const AddProduct = () => {
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get("http://localhost:5001/farmer/me", {
+        const res = await axios.get(API_BASE/farmer/me", {
           withCredentials: true,
         });
         setFarmer(res.data);
@@ -95,7 +95,7 @@ const AddProduct = () => {
       formData.append("photo", photo);
 
       const res = await axios.post(
-        "http://localhost:5001/farmer/add-product",
+        API_BASE/farmer/add-product",
         formData,
         { 
           headers: { "Content-Type": "multipart/form-data" }, 

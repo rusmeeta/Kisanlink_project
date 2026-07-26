@@ -41,7 +41,7 @@ const EditRequestsPage = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const response = await axios.get("http://localhost:5001/admin/check-auth", {
+      const response = await axios.get(API_BASE/admin/check-auth", {
         withCredentials: true
       });
 
@@ -58,7 +58,7 @@ const EditRequestsPage = () => {
   const loadEditRequests = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("http://localhost:5001/admin/edit-requests/pending", {
+      const response = await axios.get(API_BASE/admin/edit-requests/pending", {
         withCredentials: true
       });
       

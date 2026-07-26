@@ -46,7 +46,7 @@ const FarmerDashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const API_BASE_URL = "http://localhost:5001";
+  const API_BASE_URL = API_BASE";
   
   const getActiveTab = () => {
     const path = location.pathname;

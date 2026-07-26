@@ -25,7 +25,7 @@ function Signup() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5001/auth/signup", {
+      const response = await fetch(API_BASE/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -65,7 +65,7 @@ function Signup() {
             "This email is registered but not verified. Resend verification email?"
           );
           if (resend) {
-            const resendResponse = await fetch("http://localhost:5001/auth/resend-verification", {
+            const resendResponse = await fetch(API_BASE/auth/resend-verification", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: formData.email.trim().toLowerCase() }),
