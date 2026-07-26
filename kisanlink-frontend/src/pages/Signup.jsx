@@ -25,10 +25,10 @@ function Signup() {
     setIsSubmitting(true);
 
     try {
-      // FIXED: Restored the explicit /auth/signup endpoint routes parameters mapping
-      const response = await fetch("https://onrender.com", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           fullname: formData.fullname.trim(),
           email: formData.email.trim().toLowerCase(),
@@ -42,11 +42,11 @@ function Signup() {
 
       if (response.ok) {
         alert(
-          "✅ Account Created Successfully!\n\n" +
+          "Account Created Successfully!\n\n" +
           "Your account has been auto-activated for cloud deployment use.\n" +
           "You can log in immediately."
         );
-        
+
         setFormData({
           fullname: "",
           email: "",
@@ -54,25 +54,24 @@ function Signup() {
           location: "",
           user_type: "",
         });
-        
+
         navigate("/login");
-        
+
       } else {
         if (data.error && data.error.includes("not verified")) {
           const resend = window.confirm(
             "This email is registered but not verified. Resend verification email?"
           );
           if (resend) {
-            // FIXED: Restored the complete /auth/resend-verification endpoint route path mapping
-            const resendResponse = await fetch("https://onrender.com", {
+            const resendResponse = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/resend-verification`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: formData.email.trim().toLowerCase() }),
             });
-            
+
             const resendData = await resendResponse.json();
             if (resendResponse.ok) {
-              alert("✅ Verification email resent! Check your inbox.");
+              alert("Verification email resent! Check your inbox.");
             } else {
               alert(resendData.error || "Failed to resend");
             }
@@ -178,8 +177,8 @@ function Signup() {
             type="submit"
             disabled={isSubmitting}
             className={`w-full py-2 rounded font-medium ${
-              isSubmitting 
-                ? "bg-gray-400" 
+              isSubmitting
+                ? "bg-gray-400"
                 : "bg-green-600 hover:bg-green-700 text-white"
             }`}
           >
