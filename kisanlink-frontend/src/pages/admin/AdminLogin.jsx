@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { API_BASE } from '../../api';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -23,39 +23,29 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5001/admin/login', {
-        email: email.trim(),
-        password: password
-      }, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password })
       });
 
-      if (response.data.success) {
-        // Save admin login state in localStorage
+      const data = await response.json();
+
+      if (response.ok && data.access_token) {
+        // Store JWT token and admin info
+        localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('adminLoggedIn', 'true');
+        localStorage.setItem('adminName', data.user?.fullname || 'Admin');
         localStorage.setItem('adminEmail', email);
-        localStorage.setItem('adminName', response.data.user_name || 'Admin');
-        
-        console.log('✅ Login successful:', response.data);
-        
-        // Redirect to admin dashboard
+
+        console.log('✅ Login successful:', data);
         navigate('/admin/dashboard');
       } else {
-        setError(response.data.error || 'Login failed');
+        setError(data.error || 'Invalid admin credentials');
       }
     } catch (err) {
       console.error('❌ Login error:', err);
-      
-      if (err.response) {
-        setError(err.response.data.error || 'Server error occurred');
-      } else if (err.request) {
-        setError('No response from server. Please check your connection.');
-      } else {
-        setError('An error occurred. Please try again.');
-      }
+      setError('Network error. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -71,12 +61,8 @@ const AdminLogin = () => {
               <Shield className="h-8 w-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Kisanlink Admin
-          </h1>
-          <p className="text-gray-600">
-            Secure login for administrators only
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Kisanlink Admin</h1>
+          <p className="text-gray-600">Secure login for administrators only</p>
         </div>
 
         {/* Login Form */}
