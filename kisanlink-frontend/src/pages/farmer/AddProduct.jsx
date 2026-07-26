@@ -22,22 +22,26 @@ const AddProduct = () => {
   const [farmer, setFarmer] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get token from localStorage
   const getToken = () => localStorage.getItem('access_token');
 
-  // Fetch farmer info using JWT
+  // ✅ FIXED: Use /auth/me instead of /farmer/me
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/farmer/me`, {
+        const res = await axios.get(`${API_BASE}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${getToken()}`
           }
         });
-        setFarmer(res.data);
+        if (res.data && res.data.authenticated) {
+          setFarmer(res.data);
+        } else {
+          // If not authenticated, redirect to login
+          localStorage.removeItem('access_token');
+          window.location.href = '/login';
+        }
       } catch (err) {
         console.error("Error fetching farmer info:", err);
-        // If 401, redirect to login
         if (err.response?.status === 401) {
           localStorage.removeItem('access_token');
           window.location.href = '/login';
@@ -113,7 +117,6 @@ const AddProduct = () => {
         text: "✅ Product added successfully to marketplace!"
       });
 
-      // Reset form
       setForm({
         item_name: "",
         price: "",
@@ -124,7 +127,6 @@ const AddProduct = () => {
       setPhoto(null);
       setPreview(null);
 
-      // Clear success message after 5 seconds
       setTimeout(() => setMessage(""), 5000);
 
     } catch (err) {
@@ -146,7 +148,6 @@ const AddProduct = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white p-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-green-100 rounded-xl">
@@ -171,7 +172,6 @@ const AddProduct = () => {
           )}
         </div>
 
-        {/* Message Alert */}
         {message && (
           <div className={`mb-4 p-3 rounded-lg ${
             message.type === "success" 
@@ -198,12 +198,10 @@ const AddProduct = () => {
           </div>
         )}
 
-        {/* Compact Form Grid */}
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               
-              {/* Product Name */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <div className="flex items-center">
@@ -222,13 +220,9 @@ const AddProduct = () => {
                 />
               </div>
 
-              {/* Price */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
-                  <div className="flex items-center ">
-                    
-                    Price (Rs/kg) *
-                  </div>
+                  Price (Rs/kg) *
                 </label>
                 <div className="relative">
                   <div className="absolute left-4 top-3.5 text-gray-500">Rs</div>
@@ -246,7 +240,6 @@ const AddProduct = () => {
                 </div>
               </div>
 
-              {/* Location */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <div className="flex items-center">
@@ -265,7 +258,6 @@ const AddProduct = () => {
                 />
               </div>
 
-              {/* Min Order Qty */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <div className="flex items-center">
@@ -286,7 +278,6 @@ const AddProduct = () => {
                 </div>
               </div>
 
-              {/* Available Stock */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <div className="flex items-center">
@@ -307,7 +298,6 @@ const AddProduct = () => {
                 </div>
               </div>
 
-              {/* Image Upload */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <div className="flex items-center">
@@ -363,7 +353,6 @@ const AddProduct = () => {
               </div>
             </div>
 
-            {/* Submit Button */}
             <div className="pt-4 border-t border-gray-200">
               <button
                 type="submit"
