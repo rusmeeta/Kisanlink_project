@@ -10,10 +10,13 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch("http://localhost:5001/auth/me", {
-          credentials: "include",
-        });
-        
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/me`,
+          {
+            credentials: "include",
+          }
+        );
+
         if (response.ok) {
           const data = await response.json();
           if (data.authenticated) {
@@ -47,7 +50,6 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   }
 
   if (allowedUserType && user.user_type !== allowedUserType) {
-    // Redirect to appropriate dashboard
     if (user.user_type === 'farmer') {
       return <Navigate to="/farmer/dashboard" replace />;
     } else if (user.user_type === 'consumer') {
