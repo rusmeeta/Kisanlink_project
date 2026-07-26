@@ -1,4 +1,5 @@
-// Login.jsx - PRODUCTION WORKING REDIRECTION VERSION
+
+// Login.jsx - Updated with proper redirection
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -23,8 +24,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      // FIXED: Hardcoded your unique live production Render address directly
-      const response = await fetch("https://onrender.com", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -79,8 +79,7 @@ function Login() {
         return;
       }
 
-      // FIXED: Hardcoded your live production address for the resend verification endpoint
-      const response = await fetch("https://onrender.com", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5001"}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToResend })
