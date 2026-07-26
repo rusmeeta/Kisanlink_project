@@ -36,8 +36,8 @@ const ProductList = ({ isAdmin = false }) => {
     setLoading(true);
     try {
       const url = isAdmin 
-        ? API_BASE/admin/products"
-        : API_BASE/farmer/products";
+        ? "https://kisanlink-project.onrender.com/admin/products"
+        : "https://kisanlink-project.onrender.com/farmer/products";
       
       const res = await axios.get(url, { withCredentials: true });
       

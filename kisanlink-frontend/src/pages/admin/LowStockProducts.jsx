@@ -50,7 +50,7 @@ const LowStockProducts = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get(API_BASE/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       
@@ -71,7 +71,7 @@ const LowStockProducts = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get(API_BASE/admin/low-stock-products", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/low-stock-products", {
         withCredentials: true,
         timeout: 10000
       });
@@ -101,7 +101,7 @@ const LowStockProducts = () => {
       setActionLoading(prev => ({ ...prev, [product.id]: 'notifying' }));
       
       const response = await axios.post(
-        API_BASE/admin/notify-low-stock",
+        "https://kisanlink-project.onrender.com/admin/notify-low-stock",
         {
           product_id: product.id,
           farmer_id: product.farmer_id

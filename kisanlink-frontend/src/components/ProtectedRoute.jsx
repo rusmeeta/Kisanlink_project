@@ -10,7 +10,7 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch(API_BASE/auth/me", {
+        const response = await fetch("https://kisanlink-project.onrender.com/auth/me", {
           credentials: "include",
         });
         

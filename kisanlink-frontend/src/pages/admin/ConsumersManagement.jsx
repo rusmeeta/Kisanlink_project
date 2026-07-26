@@ -58,7 +58,7 @@ const ConsumersManagement = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get(API_BASE/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       

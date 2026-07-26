@@ -46,7 +46,7 @@ const FarmerDashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const API_BASE_URL = API_BASE";
+  const API_BASE_URL = "https://kisanlink-project.onrender.com";
   
   const getActiveTab = () => {
     const path = location.pathname;

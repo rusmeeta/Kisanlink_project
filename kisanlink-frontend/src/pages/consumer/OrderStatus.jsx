@@ -72,7 +72,7 @@ const OrderStatus = () => {
     try {
       const userId = localStorage.getItem("userId");
       
-      const response = await fetch(API_BASE/orders/cancel", {
+      const response = await fetch("https://kisanlink-project.onrender.com/orders/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

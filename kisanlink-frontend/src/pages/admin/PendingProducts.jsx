@@ -47,7 +47,7 @@ const PendingProducts = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const response = await axios.get(API_BASE/admin/check-auth", {
+      const response = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
         withCredentials: true
       });
 
@@ -74,7 +74,7 @@ const PendingProducts = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get(API_BASE/admin/products/pending", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/products/pending", {
         withCredentials: true,
         timeout: 10000
       });
@@ -213,7 +213,7 @@ const PendingProducts = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post(API_BASE/admin/logout", {}, {
+      await axios.post("https://kisanlink-project.onrender.com/admin/logout", {}, {
         withCredentials: true
       });
     } catch (err) {

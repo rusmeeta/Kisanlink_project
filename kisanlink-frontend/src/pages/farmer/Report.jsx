@@ -35,7 +35,7 @@ function Report() {
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get(API_BASE/farmer/me", {
+        const res = await axios.get("https://kisanlink-project.onrender.com/farmer/me", {
           withCredentials: true
         });
         setFarmerId(res.data.id);

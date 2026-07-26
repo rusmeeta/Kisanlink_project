@@ -17,7 +17,7 @@ const FarmerChat = () => {
   // Fetch current farmer info
   const fetchFarmer = async () => {
     try {
-      const res = await fetch(API_BASE/farmer/me", {
+      const res = await fetch("https://kisanlink-project.onrender.com/farmer/me", {
         credentials: "include",
       });
       if (res.ok) {

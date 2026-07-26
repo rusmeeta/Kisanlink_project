@@ -37,7 +37,7 @@ const FarmerOrdersPage = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch(API_BASE/orders/update-status", {
+      const response = await fetch("https://kisanlink-project.onrender.com/orders/update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

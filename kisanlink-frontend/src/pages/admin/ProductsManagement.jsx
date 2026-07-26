@@ -54,7 +54,7 @@ const ProductsManagement = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get(API_BASE/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       
@@ -75,7 +75,7 @@ const ProductsManagement = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get(API_BASE/admin/products", {
+      const res = await axios.get("https://kisanlink-project.onrender.com/admin/products", {
         withCredentials: true,
         timeout: 10000
       });
