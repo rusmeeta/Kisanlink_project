@@ -1,5 +1,4 @@
-const API_URL = "https://onrender.com";
-
+const API_URL = "https://kisanlink-project.onrender.com"
 
 // Signup function
 export async function signup(data) {
@@ -20,3 +19,4 @@ export async function login(data) {
   });
   return response.json();
 }
+
