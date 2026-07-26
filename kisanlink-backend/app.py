@@ -257,6 +257,30 @@ app.register_blueprint(simple_bp, url_prefix="/simple")
 app.register_blueprint(admin_bp, url_prefix="/admin")
 app.register_blueprint(complaints_bp, url_prefix="/complaints")
 
+# 🚀 FORCE COLUMN CREATION FOR GUNICORN (RENDER PRODUCTION BUILD):
+# Placing this code outside of the __main__ block ensures it executes during cloud boot.
+try:
+    from db import get_db_connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    print("🧹 Synchronizing missing columns into production PostgreSQL tables...")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
+    
+    # Auto-verify existing test accounts
+    cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ SUCCESS: Database layout columns synchronized perfectly on cloud boot!")
+except Exception as db_err:
+    print(f"⚠️ Database column synchronization notice: {db_err}")
+
 # ------------------------------
 # HEALTH CHECK
 # ------------------------------
@@ -266,62 +290,14 @@ def index():
         "service": "KisanLink API",
         "status": "running",
         "version": "1.0",
-        "email_service": "ready" if os.getenv("EMAIL_USER") and os.getenv("EMAIL_PASSWORD") else "not configured",
-        "endpoints": {
-            "test_email": "/test-email",
-            "debug_env": "/debug-env",
-            "auth": "/auth/*",
-            "farmer": "/farmer/*",
-            "consumer": "/consumer/*"
-        }
+        "email_service": "ready" if os.getenv("EMAIL_USER") and os.getenv("EMAIL_PASSWORD") else "not configured"
     }
-
-# 🚀 FORCED SCHEMA RESET FOR PRODUCTION:
-# Wipes old mismatched tables so Gunicorn can recreate them with the 'is_active' column.
-with app.app_context():
-    try:
-        print("🧼 STEP 1: Wiping old mismatched cloud database tables...")
-        db.drop_all()
-        
-        print("🏗️ STEP 2: Rebuilding fresh schemas with 'is_active' columns...")
-        db.create_all()
-        print("✅ SUCCESS: Render cloud database tables synchronized perfectly!")
-    except Exception as server_db_error:
-        print(f"❌ DATABASE ERROR: {server_db_error}")
 
 # ------------------------------
 # RUN APP (Used for local laptop testing only)
-# ------------------------------
-# ------------------------------
-# RUN APP & AUTO-FIX COLUMNS
 # ------------------------------
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("🚀 STARTING SERVER ON PORT 5001")
     print("="*60)
-    
-    # 🚀 AUTOMATED COLUMNS REPAIR: Adds the missing fields instantly to the database
-    try:
-        from db import get_db_connection
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Inject the columns your login and signup are crashing on
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
-        
-        # Make sure any existing accounts are automatically verified and active
-        cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("✅ SUCCESS: Database layout columns synchronized perfectly!")
-    except Exception as db_err:
-        print(f"⚠️ Database column synchronization note: {db_err}")
-        
-    print("="*60 + "\n")
     app.run(debug=True, port=5001)
