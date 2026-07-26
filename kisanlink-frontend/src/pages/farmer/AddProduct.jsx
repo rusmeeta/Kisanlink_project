@@ -5,11 +5,8 @@ import {
   ShoppingCart, Box, Camera, Plus, 
   Loader2, CheckCircle, X
 } from "lucide-react";
+import { API_BASE } from "../../api";
 
-/**
- * AddProduct component:
- * Compact non-scrolling form that fits within window height
- */
 const AddProduct = () => {
   const [form, setForm] = useState({
     item_name: "",
@@ -25,22 +22,31 @@ const AddProduct = () => {
   const [farmer, setFarmer] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get farmer info from backend session
+  // Get token from localStorage
+  const getToken = () => localStorage.getItem('access_token');
+
+  // Fetch farmer info using JWT
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get("http://localhost:5001/farmer/me", {
-          withCredentials: true,
+        const res = await axios.get(`${API_BASE}/farmer/me`, {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
         });
         setFarmer(res.data);
       } catch (err) {
         console.error("Error fetching farmer info:", err);
+        // If 401, redirect to login
+        if (err.response?.status === 401) {
+          localStorage.removeItem('access_token');
+          window.location.href = '/login';
+        }
       }
     };
     fetchFarmer();
   }, []);
 
-  // Preview image before upload
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -58,18 +64,15 @@ const AddProduct = () => {
     }
   };
 
-  // Update form state
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Handle number inputs
   const handleNumberChange = (e) => {
     const value = Math.max(1, parseInt(e.target.value) || 1);
     setForm({ ...form, [e.target.name]: value });
   };
 
-  // Submit new product to backend
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -95,11 +98,13 @@ const AddProduct = () => {
       formData.append("photo", photo);
 
       const res = await axios.post(
-        "http://localhost:5001/farmer/add-product",
+        `${API_BASE}/farmer/add-product`,
         formData,
         { 
-          headers: { "Content-Type": "multipart/form-data" }, 
-          withCredentials: true 
+          headers: { 
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${getToken()}`
+          }
         }
       );
 
@@ -113,8 +118,8 @@ const AddProduct = () => {
         item_name: "",
         price: "",
         location: "",
-        min_order_qty:"" ,
-        available_stock:"" ,
+        min_order_qty: 1,
+        available_stock: 1,
       });
       setPhoto(null);
       setPreview(null);
@@ -133,7 +138,6 @@ const AddProduct = () => {
     }
   };
 
-  // Remove selected image
   const removeImage = () => {
     setPhoto(null);
     setPreview(null);
@@ -373,12 +377,12 @@ const AddProduct = () => {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Submit
+                    Submitting...
                   </>
                 ) : (
                   <>
                     <Plus className="w-5 h-5 mr-2" />
-                    Submit
+                    Add Product
                   </>
                 )}
               </button>
@@ -389,16 +393,6 @@ const AddProduct = () => {
           </form>
         </div>
 
-        {/* Quick Stats */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          
-          
-          
-          
-        </div>
-
-        {/* Footer Note */}
         <div className="mt-6 text-center text-xs text-gray-500">
           <p>Product will be listed immediately. You can edit or remove it from the Product List page.</p>
         </div>
