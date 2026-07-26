@@ -1,4 +1,4 @@
-# app.py - FINAL PRODUCTION VERSION
+# app.py - FINAL PRODUCTION VERSION (WITH JWT)
 import os
 import sys
 import re
@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager  # <--- NEW IMPORT
 
 # ------------------------------
 # LOAD .ENV
@@ -50,13 +51,18 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
-# Session config
+# ========== JWT CONFIGURATION (ADD THESE 3 LINES) ==========
+app.config['JWT_SECRET_KEY'] = os.getenv("SECRET_KEY", "supersecretkey")
+jwt = JWTManager(app)  # <--- THIS INITIALIZES JWT
+# ============================================================
+
+# Session config (keep for now, but JWT handles auth)
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=True,
 )
 
-# CORS – keep for local development, but not needed for production (same domain)
+# CORS – keep for local development
 CORS(app, 
      origins=[
          re.compile(r"^https://.*\.vercel\.app$"),
