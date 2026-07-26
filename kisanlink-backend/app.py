@@ -139,6 +139,13 @@ app.config.from_object(Config)
 # Use secret key from .env or default
 app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
+# Required so the session cookie is accepted on cross-site requests
+# between your Vercel frontend and Render backend (different domains)
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True,
+)
+
 # CORS
 # CORS - Updated with your real Vercel links
 # CORS - Dynamic pattern matching for all local and Vercel subdomains
