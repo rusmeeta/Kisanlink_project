@@ -18,7 +18,9 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/auth/login`, {
+      // ✅ Use environment variable for backend URL
+      const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5001";
+      const response = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
@@ -28,13 +30,11 @@ function Login() {
       console.log("Login response:", data);
 
       if (response.status === 200 && data.access_token) {
-        // ✅ SAVE TOKEN
         localStorage.setItem("access_token", data.access_token);
         localStorage.setItem("userType", data.user.user_type);
         localStorage.setItem("userName", data.user.fullname);
         localStorage.setItem("userId", data.user.id);
 
-        // Redirect
         const userType = data.user.user_type;
         if (userType === "farmer") navigate("/farmer/dashboard");
         else if (userType === "consumer") navigate("/consumer/dashboard");

@@ -9,7 +9,7 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('access_token');
-      
+
       if (!token) {
         setLoading(false);
         setUser(null);
@@ -17,9 +17,10 @@ const ProtectedRoute = ({ children, allowedUserType }) => {
       }
 
       try {
-        const response = await fetch(`/auth/me`, {
+        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5001";
+        const response = await fetch(`${apiUrl}/auth/me`, {
           headers: {
-            'Authorization': `Bearer ${token}`  // <-- THIS IS THE FIX
+            'Authorization': `Bearer ${token}`
           }
         });
 
