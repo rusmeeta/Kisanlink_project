@@ -530,8 +530,8 @@ const checkAdminAuth = async () => {
           />
           
           <StatCard
-            title="Pending Approvals"
-            value={stats.pendingProducts + pendingEditRequests.length}
+            title="Pending Product Approvals"
+            value={stats.pendingProducts}
             change={-3}
             icon={<Clock className="h-6 w-6 text-yellow-600" />}
             color="bg-yellow-100"

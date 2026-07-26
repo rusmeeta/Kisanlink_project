@@ -470,7 +470,7 @@ def get_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ------------------ Update Product ------------------
+
 # ------------------ Update Product (with approval) ------------------
 @farmer_bp.route("/update-product/<int:product_id>", methods=["PUT"])
 def update_product(product_id):
@@ -742,6 +742,3 @@ def test_endpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@farmer_bp.route("/health", methods=["GET"])
-def health_check():
-    return jsonify({"status": "healthy", "service": "farmer"})

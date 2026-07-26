@@ -391,16 +391,7 @@
           )}
 
           {/* Instructions */}
-          <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-            <h3 className="text-sm font-medium text-green-800 mb-2">How it works:</h3>
-            <ul className="text-sm text-green-600 space-y-1">
-              <li>• Conversations with <span className="text-red-600 font-semibold">red numbers</span> have unread messages</li>
-              <li>• Click on any conversation to chat with the farmer</li>
-              <li>• Messages are marked as read when you open the conversation</li>
-              <li>• List auto-refreshes every 10 seconds</li>
-              <li>• Use the "Chat with Farmer" button on product pages to start new conversations</li>
-            </ul>
-          </div>
+          
         </div>
       </div>
     );

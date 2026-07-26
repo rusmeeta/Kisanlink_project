@@ -748,13 +748,7 @@ Please contact support if you have any questions.
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h5 className="font-bold text-gray-900 mb-3">Account History</h5>
                     <div className="space-y-3 text-sm">
-                      <div className="flex justify-between items-center p-2 bg-white rounded border">
-                        <div className="flex items-center">
-                          <Info className="h-4 w-4 text-blue-500 mr-2" />
-                          <span className="text-gray-600">Account Created:</span>
-                        </div>
-                        <span className="font-medium">{formatDate(selectedConsumer.created_at)}</span>
-                      </div>
+                      
                       <div className="flex justify-between items-center p-2 bg-white rounded border">
                         <div className="flex items-center">
                           <Calendar className="h-4 w-4 text-blue-500 mr-2" />

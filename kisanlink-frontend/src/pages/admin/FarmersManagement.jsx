@@ -607,10 +607,7 @@ const FarmersManagement = () => {
                     </div>
                     
                     {/* Account Created - Added like in Consumer */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">Account Created</p>
-                      <p className="font-medium">{selectedFarmer.created_at ? formatDate(selectedFarmer.created_at) : 'Never'}</p>
-                    </div>
+                    
                   </div>
 
                   {/* DEACTIVATION INFORMATION - SHOW FOR INACTIVE FARMERS */}
@@ -752,10 +749,7 @@ Please contact support if you have any questions.
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h5 className="font-bold text-gray-900 mb-3">Account History</h5>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Account Created:</span>
-                        <span className="font-medium">{selectedFarmer.created_at ? formatDate(selectedFarmer.created_at) : 'Never'}</span>
-                      </div>
+                      
                       <div className="flex justify-between">
                         <span className="text-gray-600">Last Login:</span>
                         <span className="font-medium">{formatDate(selectedFarmer.last_login)}</span>

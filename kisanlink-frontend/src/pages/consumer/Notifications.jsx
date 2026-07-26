@@ -446,7 +446,7 @@ const ConsumerNotifications = () => {
 
         
 
-        {/* Simple Instructions */}
+      
         
       </div>
     </div>

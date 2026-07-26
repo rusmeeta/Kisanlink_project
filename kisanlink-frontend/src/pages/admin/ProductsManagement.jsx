@@ -378,9 +378,9 @@ const ProductsManagement = () => {
                         <span className="truncate">{product.location}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center text-lg font-semibold text-gray-900">
-                          <DollarSign className="h-5 w-5 text-green-600" />
-                          ₹{product.price}
+                        <div className="flex items-center text-lg font-semibold text-green-900 ">
+                          
+                          {product.price}
                         </div>
                         <div className="flex items-center">
                           {getStockBadge(product.available_stock)}
@@ -514,7 +514,7 @@ const ProductsManagement = () => {
                       <span className="font-medium">{selectedProduct.farmer_name}</span>
                     </div>
                     <div className="flex items-center text-2xl font-bold text-green-600">
-                      <DollarSign className="h-6 w-6" />
+                      
                       {selectedProduct.price}
                     </div>
                   </div>
