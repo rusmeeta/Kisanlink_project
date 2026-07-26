@@ -13,7 +13,7 @@ const AdminLogin = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Please enter both email and password');
       return;
@@ -23,7 +23,7 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5001/admin/login', {
+      const response = await axios.post('https://kisanlink-project-1.onrender.com/admin/login', {
         email: email.trim(),
         password: password
       }, {
@@ -34,21 +34,16 @@ const AdminLogin = () => {
       });
 
       if (response.data.success) {
-        // Save admin login state in localStorage
         localStorage.setItem('adminLoggedIn', 'true');
         localStorage.setItem('adminEmail', email);
         localStorage.setItem('adminName', response.data.user_name || 'Admin');
-        
         console.log('✅ Login successful:', response.data);
-        
-        // Redirect to admin dashboard
         navigate('/admin/dashboard');
       } else {
         setError(response.data.error || 'Login failed');
       }
     } catch (err) {
       console.error('❌ Login error:', err);
-      
       if (err.response) {
         setError(err.response.data.error || 'Server error occurred');
       } else if (err.request) {
@@ -60,6 +55,7 @@ const AdminLogin = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
