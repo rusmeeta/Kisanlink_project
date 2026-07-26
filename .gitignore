@@ -1,6 +1,22 @@
-.env
-*.env
+# Node Dependencies
+node_modules/
+kisanlink-frontend/node_modules/
+package-lock.json
+
+# Virtual Environments
 .venv/
 venv/
-__pycache__/
-node_modules/
+env/
+
+# Python Cache (Searches every sub-directory)
+**/__pycache__/
+*.pyc
+
+# Local environments and configuration keys
+.env
+*.env
+.env.local
+kisanlink-backend/.env
+
+# Local User Uploaded Media
+kisanlink-backend/uploads/
