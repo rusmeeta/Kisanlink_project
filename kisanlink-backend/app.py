@@ -130,8 +130,14 @@ try:
         );
     """)
 
-    # NEW: fix missing column bug from earlier
     cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT FALSE;")
+    cur.execute("UPDATE farmer_items SET is_approved = TRUE WHERE status = 'approved';")
+
+    # NEW: fix missing created_at column
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();")
+
+
+    
     conn.commit()
     cur.close()
     conn.close()

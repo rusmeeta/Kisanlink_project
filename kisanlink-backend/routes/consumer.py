@@ -362,10 +362,7 @@ def get_consumer_farmer_messages(farmer_id):
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
             "message": msg.content,
-            "created_at": msg.timestamp.isoformat() if msg.timestamp else None,
-            "file_url": msg.file_url,
-            "file_name": msg.file_name,
-            "file_type": msg.file_type,
+            
             "sender_name": sender.fullname if sender else "Unknown"
         })
     
@@ -405,10 +402,8 @@ def send_consumer_message(farmer_id):
     new_message = Message(
         sender_id=consumer_id,
         receiver_id=farmer_id,
-        content=data.get("message", "").strip(),
-        file_url=data.get("file_url"),
-        file_name=data.get("file_name"),
-        file_type=data.get("file_type")
+        content=data.get("message", "").strip()
+       
     )
     
     db.session.add(new_message)
@@ -424,10 +419,7 @@ def send_consumer_message(farmer_id):
             "sender_id": new_message.sender_id,
             "receiver_id": new_message.receiver_id,
             "message": new_message.content,
-            "created_at": new_message.timestamp.isoformat() if new_message.timestamp else None,
-            "file_url": new_message.file_url,
-            "file_name": new_message.file_name,
-            "file_type": new_message.file_type,
+         
             "sender_name": sender.fullname if sender else "Unknown"
         }
     })
