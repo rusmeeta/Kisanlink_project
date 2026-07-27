@@ -136,8 +136,49 @@ try:
     # NEW: fix missing created_at column
     cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();")
 
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS rejection_reason TEXT;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS approved_by INTEGER;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS has_pending_edit BOOLEAN DEFAULT FALSE;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS edit_status VARCHAR(30);")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS edit_requested_at TIMESTAMP;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS last_updated_by INTEGER;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS last_updated_at TIMESTAMP;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS latitude FLOAT;")
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS longitude FLOAT;")
 
-    
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS product_edit_requests (
+            id SERIAL PRIMARY KEY,
+            product_id INTEGER NOT NULL,
+            farmer_id INTEGER NOT NULL,
+            current_item_name VARCHAR(255),
+            current_price FLOAT,
+            current_location VARCHAR(255),
+            current_min_order_qty INTEGER,
+            current_available_stock INTEGER,
+            current_photo_path VARCHAR(255),
+            proposed_item_name VARCHAR(255),
+            proposed_price FLOAT,
+            proposed_location VARCHAR(255),
+            proposed_min_order_qty INTEGER,
+            proposed_available_stock INTEGER,
+            proposed_photo_path VARCHAR(255),
+            proposed_latitude FLOAT,
+            proposed_longitude FLOAT,
+            requested_at TIMESTAMP DEFAULT NOW(),
+            edit_status VARCHAR(30) DEFAULT 'edit_pending',
+            reviewed_by INTEGER,
+            reviewed_at TIMESTAMP,
+            rejection_reason TEXT
+        );
+    """)
+
+    cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_url VARCHAR(500);")
+    cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);")
+    cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_type VARCHAR(100);")
+
+
     conn.commit()
     cur.close()
     conn.close()

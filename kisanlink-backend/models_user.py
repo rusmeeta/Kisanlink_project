@@ -5,6 +5,7 @@ import secrets
 
 class User(db.Model):
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     fullname = db.Column(db.String(100), nullable=False)
@@ -17,15 +18,23 @@ class User(db.Model):
     login_count = db.Column(db.Integer, default=0)
     last_login = db.Column(db.DateTime)
     
-    # ✅ ADD THESE 3 LINES for email verification
     is_email_verified = db.Column(db.Boolean, default=False)
     verification_token = db.Column(db.String(100), unique=True)
     verification_token_expiry = db.Column(db.DateTime)
+
+    # NEW: matches what admin.py and consumer.py already expect
+    is_active = db.Column(db.Boolean, default=True)
+    deactivation_reason = db.Column(db.Text)
+    deactivated_at = db.Column(db.DateTime)
+    deactivation_type = db.Column(db.String(20))
+    deactivated_by = db.Column(db.Integer)
+    reactivated_at = db.Column(db.DateTime)
+    reactivation_reason = db.Column(db.Text)
+    email_verified_at = db.Column(db.DateTime)
     
     def __repr__(self):
         return f'<User {self.email}>'
     
-    # ✅ ADD THIS METHOD to generate verification token
     def generate_verification_token(self, expires_hours=24):
         """Generate a secure verification token"""
         self.verification_token = secrets.token_urlsafe(32)
