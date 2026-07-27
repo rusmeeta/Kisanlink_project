@@ -73,7 +73,7 @@ const NotificationItem = ({ notification, currentUserType }) => {
   const markAsRead = async () => {
     if (!isRead && notification.id) {
       try {
-        const response = await fetch(`http://localhost:5001/notifications/${notification.id}/read`, {
+        const response = await fetch(`https://kisanlink-project-1.onrender.com/notifications/${notification.id}/read`, {
           method: 'POST',
           credentials: 'include'
         });
@@ -123,7 +123,7 @@ const NotificationItem = ({ notification, currentUserType }) => {
     } else if (notification.order_id) {
       // If it has order_id but no consumer_id, try to get consumer info first
       try {
-        const res = await fetch(`http://localhost:5001/orders/${notification.order_id}/consumer`, {
+        const res = await fetch(`https://kisanlink-project-1.onrender.com/orders/${notification.order_id}/consumer`, {
           credentials: 'include'
         });
         if (res.ok) {

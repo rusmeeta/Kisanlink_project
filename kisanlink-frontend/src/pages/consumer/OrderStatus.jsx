@@ -45,7 +45,7 @@ const OrderStatus = () => {
         return;
       }
 
-      const response = await fetch(`http://localhost:5001/orders/consumer/${userId}`, {
+      const response = await fetch(`https://kisanlink-project-1.onrender.com/orders/consumer/${userId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -72,7 +72,7 @@ const OrderStatus = () => {
     try {
       const userId = localStorage.getItem("userId");
       
-      const response = await fetch("https://kisanlink-project.onrender.com/orders/cancel", {
+      const response = await fetch("https://kisanlink-project-1.onrender.com/orders/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

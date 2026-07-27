@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Bell, RefreshCw, ArrowLeft, MessageCircle, ShoppingCart, Check } from 'lucide-react';
 
-const BACKEND_URL = "https://kisanlink-project.onrender.com";
+const BACKEND_URL = "https://kisanlink-project-1.onrender.com";
 
 const ConsumerNotifications = () => {
   const [notifications, setNotifications] = useState([]);

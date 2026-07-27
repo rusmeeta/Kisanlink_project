@@ -54,7 +54,7 @@ const ProductsManagement = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       
@@ -75,7 +75,7 @@ const ProductsManagement = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/products", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/products", {
         withCredentials: true,
         timeout: 10000
       });
@@ -123,7 +123,7 @@ const ProductsManagement = () => {
       setActionLoading(prev => ({ ...prev, [productToUpdate]: 'updating' }));
       
       await axios.put(
-        `http://localhost:5001/admin/products/${productToUpdate}/status`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${productToUpdate}/status`,
         { status: newStatus },
         { withCredentials: true }
       );
@@ -154,7 +154,7 @@ const ProductsManagement = () => {
       setActionLoading(prev => ({ ...prev, [productToDelete.id]: 'deleting' }));
       
       await axios.delete(
-        `http://localhost:5001/admin/products/${productToDelete.id}`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${productToDelete.id}`,
         { withCredentials: true }
       );
       
@@ -344,7 +344,7 @@ const ProductsManagement = () => {
                   <div className="h-48 bg-gray-100 relative overflow-hidden">
                     {product.photo_path ? (
                       <img
-                        src={`http://localhost:5001/uploads/${product.photo_path}`}
+                        src={`https://kisanlink-project-1.onrender.com/uploads/${product.photo_path}`}
                         alt={product.item_name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -491,7 +491,7 @@ const ProductsManagement = () => {
                 <div className="h-64 bg-gray-100 rounded-xl overflow-hidden">
                   {selectedProduct.photo_path ? (
                     <img
-                      src={`http://localhost:5001/uploads/${selectedProduct.photo_path}`}
+                      src={`https://kisanlink-project-1.onrender.com/uploads/${selectedProduct.photo_path}`}
                       alt={selectedProduct.item_name}
                       className="w-full h-full object-cover"
                     />

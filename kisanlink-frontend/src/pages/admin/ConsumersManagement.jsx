@@ -58,7 +58,7 @@ const ConsumersManagement = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       
@@ -79,7 +79,7 @@ const ConsumersManagement = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get(`http://localhost:5001/admin/consumers?status=${statusFilter}`, {
+      const res = await axios.get(`https://kisanlink-project-1.onrender.com/admin/consumers?status=${statusFilter}`, {
         withCredentials: true,
         timeout: 10000
       });
@@ -157,7 +157,7 @@ const ConsumersManagement = () => {
       
       // Send the notification message along with other data
       const response = await axios.post(
-        `http://localhost:5001/admin/users/${consumerToDeactivate.id}/deactivate`,
+        `https://kisanlink-project-1.onrender.com/admin/users/${consumerToDeactivate.id}/deactivate`,
         { 
           reason: deactivationReason,
           deactivation_type: deactivationType,
@@ -203,7 +203,7 @@ const ConsumersManagement = () => {
       setActionLoading(prev => ({ ...prev, [consumerToReactivate.id]: 'reactivating' }));
       
       const response = await axios.post(
-        `http://localhost:5001/admin/users/${consumerToReactivate.id}/reactivate`,
+        `https://kisanlink-project-1.onrender.com/admin/users/${consumerToReactivate.id}/reactivate`,
         { 
           reason: reactivationReason || "Admin manually reactivated account" 
         },

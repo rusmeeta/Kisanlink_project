@@ -39,7 +39,7 @@ const Dashboard = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshingMessages, setRefreshingMessages] = useState(false);
   const [refreshingNotifications, setRefreshingNotifications] = useState(false);
-  const API_BASE_URL = "https://kisanlink-project.onrender.com";
+  const API_BASE_URL = "https://kisanlink-project-1.onrender.com";
 
   // Fetch logged-in user
   useEffect(() => {
@@ -936,7 +936,7 @@ const ProductCard = ({ product, addToCart }) => {
         <img
           src={
             product.photo_path
-              ? `http://localhost:5001/uploads/${product.photo_path}`
+              ? `https://kisanlink-project-1.onrender.com/uploads/${product.photo_path}`
               : "https://via.placeholder.com/150"
           }
           alt={product.item_name}

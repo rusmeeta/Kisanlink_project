@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const DELIVERY_PER_FARMER = 50;
-const BACKEND_URL = "https://kisanlink-project.onrender.com";
+const BACKEND_URL = "https://kisanlink-project-1.onrender.com";
 
 const Cart = () => {
   const navigate = useNavigate();

@@ -50,7 +50,7 @@ const LowStockProducts = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
       
@@ -71,7 +71,7 @@ const LowStockProducts = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/low-stock-products", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/low-stock-products", {
         withCredentials: true,
         timeout: 10000
       });
@@ -101,7 +101,7 @@ const LowStockProducts = () => {
       setActionLoading(prev => ({ ...prev, [product.id]: 'notifying' }));
       
       const response = await axios.post(
-        "https://kisanlink-project.onrender.com/admin/notify-low-stock",
+        "https://kisanlink-project-1.onrender.com/admin/notify-low-stock",
         {
           product_id: product.id,
           farmer_id: product.farmer_id
@@ -140,7 +140,7 @@ const LowStockProducts = () => {
       setSelectedProduct(product);
       
       const response = await axios.get(
-        `http://localhost:5001/admin/products/${product.id}/notification-history`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${product.id}/notification-history`,
         {
           withCredentials: true,
           timeout: 10000
@@ -179,7 +179,7 @@ const LowStockProducts = () => {
       setActionLoading(prev => ({ ...prev, [productToDelete.id]: 'deleting' }));
       
       const response = await axios.delete(
-        `http://localhost:5001/admin/products/${productToDelete.id}/delete-low-stock`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${productToDelete.id}/delete-low-stock`,
         {
           data: { reason: deleteReason },
           withCredentials: true,

@@ -57,7 +57,7 @@ const FarmersManagement = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
 
@@ -78,7 +78,7 @@ const FarmersManagement = () => {
       setLoading(true);
       setError("");
 
-      const res = await axios.get(`http://localhost:5001/admin/farmers?status=${statusFilter}`, {
+      const res = await axios.get(`https://kisanlink-project-1.onrender.com/admin/farmers?status=${statusFilter}`, {
         withCredentials: true,
         timeout: 10000
       });
@@ -156,7 +156,7 @@ const FarmersManagement = () => {
 
       // Send the notification message along with other data
       const response = await axios.post(
-        `http://localhost:5001/admin/users/${farmerToDeactivate.id}/deactivate`,
+        `https://kisanlink-project-1.onrender.com/admin/users/${farmerToDeactivate.id}/deactivate`,
         {
           reason: deactivationReason,
           deactivation_type: deactivationType,
@@ -202,7 +202,7 @@ const FarmersManagement = () => {
       setActionLoading(prev => ({ ...prev, [farmerToReactivate.id]: 'reactivating' }));
 
       const response = await axios.post(
-        `http://localhost:5001/admin/users/${farmerToReactivate.id}/reactivate`,
+        `https://kisanlink-project-1.onrender.com/admin/users/${farmerToReactivate.id}/reactivate`,
         {
           reason: reactivationReason || "Admin manually reactivated account"
         },

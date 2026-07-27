@@ -47,7 +47,7 @@ const PendingProducts = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const response = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const response = await axios.get("https://kisanlink-project.onrender-1.com/admin/check-auth", {
         withCredentials: true
       });
 
@@ -74,7 +74,7 @@ const PendingProducts = () => {
       setLoading(true);
       setError("");
       
-      const res = await axios.get("https://kisanlink-project.onrender.com/admin/products/pending", {
+      const res = await axios.get("https://kisanlink-project-1.onrender.com/admin/products/pending", {
         withCredentials: true,
         timeout: 10000
       });
@@ -112,7 +112,7 @@ const PendingProducts = () => {
     try {
       setApprovingProduct(productId);
       const response = await axios.post(
-        `http://localhost:5001/admin/products/${productId}/approve`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${productId}/approve`,
         {},
         { 
           withCredentials: true,
@@ -153,7 +153,7 @@ const PendingProducts = () => {
     try {
       setRejectingProduct(selectedProduct.id);
       const response = await axios.post(
-        `http://localhost:5001/admin/products/${selectedProduct.id}/reject`,
+        `https://kisanlink-project-1.onrender.com/admin/products/${selectedProduct.id}/reject`,
         { reason: rejectReason },
         { 
           withCredentials: true,
@@ -213,7 +213,7 @@ const PendingProducts = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post("https://kisanlink-project.onrender.com/admin/logout", {}, {
+      await axios.post("https://kisanlink-project-1.onrender.com/admin/logout", {}, {
         withCredentials: true
       });
     } catch (err) {
@@ -338,7 +338,7 @@ const PendingProducts = () => {
                     <div className="md:w-48 md:h-48 h-40 w-full bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                       {product.photo_path ? (
                         <img
-                          src={`http://localhost:5001/uploads/${product.photo_path}`}
+                          src={`https://kisanlink-project-1.onrender.com/uploads/${product.photo_path}`}
                           alt={product.item_name}
                           className="w-full h-full object-cover"
                         />
@@ -492,7 +492,7 @@ const PendingProducts = () => {
                 <div className="h-80 bg-gray-100 rounded-xl overflow-hidden">
                   {selectedProduct.photo_path ? (
                     <img
-                      src={`http://localhost:5001/uploads/${selectedProduct.photo_path}`}
+                      src={`https://kisanlink-project-1.onrender.com/uploads/${selectedProduct.photo_path}`}
                       alt={selectedProduct.item_name}
                       className="w-full h-full object-cover"
                     />

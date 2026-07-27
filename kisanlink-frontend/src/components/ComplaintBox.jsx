@@ -10,7 +10,7 @@ const AdminComplaints = () => {
   const fetchComplaints = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5001/complaints/admin/all', {
+      const res = await fetch('`https://kisanlink-project-1.onrender.com/complaints/admin/all', {
         credentials: 'include'
       });
       
@@ -38,7 +38,7 @@ const AdminComplaints = () => {
 
   const updateComplaintStatus = async (complaintId, status) => {
     try {
-      const res = await fetch(`http://localhost:5001/complaints/admin/update/${complaintId}`, {
+      const res = await fetch(`https://kisanlink-project-1.onrender.com/complaints/admin/update/${complaintId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 

@@ -40,9 +40,9 @@ const ConsumerChat = () => {
 
     // Try multiple endpoints to get farmer name
     const endpoints = [
-      `http://localhost:5001/consumer/farmer-details/${id}`,
-      `http://localhost:5001/auth/users/${id}`,
-      `http://localhost:5001/farmer/me?user_id=${id}`,
+      `https://kisanlink-project-1.onrender.com/consumer/farmer-details/${id}`,
+      `https://kisanlink-project-1.onrender.com/auth/users/${id}`,
+      `https://kisanlink-project-1.onrender.com/farmer/me?user_id=${id}`,
     ];
 
     for (const endpoint of endpoints) {
@@ -75,7 +75,7 @@ const ConsumerChat = () => {
 
     // Last resort: Try to get name from messages
     try {
-      const msgResponse = await fetch(`http://localhost:5001/messages/${id}`, {
+      const msgResponse = await fetch(`https://kisanlink-project-1.onrender.com/messages/${id}`, {
         credentials: "include",
       });
 

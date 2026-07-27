@@ -15,7 +15,7 @@ const FarmerOrderCard = ({ order, onStatusUpdate }) => {
     
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5001/orders/update-status', {
+      const response = await fetch('`https://kisanlink-project-1.onrender.com/orders/update-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
