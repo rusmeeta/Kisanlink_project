@@ -46,7 +46,7 @@ const FarmerDashboard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const API_BASE_URL = "https://kisanlink-project.onrender.com";
+  const API_BASE_URL = "https://kisanlink-project-1.onrender.com";
   
   const getActiveTab = () => {
     const path = location.pathname;
@@ -358,7 +358,7 @@ const FarmerDashboard = () => {
       }
 
       try {
-        const ordersRes = await fetch(`${API_BASE_URL}/api/farmer/report/${user.id}`, {
+        const ordersRes = await fetch(`${API_BASE_URL}/farmer/report/${user.id}`, {
           credentials: "include",
         });
         

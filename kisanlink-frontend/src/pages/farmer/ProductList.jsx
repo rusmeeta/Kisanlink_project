@@ -87,11 +87,11 @@ const ProductList = ({ isAdmin = false }) => {
   const handleDelete = async (id) => {
     try {
       if (isAdmin) {
-        await axios.delete(`http://localhost:5001/admin/products/${id}/force-delete`, {
+        await axios.delete(`https://kisanlink-project-1.onrender.com/admin/products/${id}/force-delete`, {
           withCredentials: true,
         });
       } else {
-        await axios.delete(`http://localhost:5001/farmer/delete-product/${id}`, {
+        await axios.delete(`https://kisanlink-project-1.onrender.com/farmer/delete-product/${id}`, {
           withCredentials: true,
         });
       }
@@ -109,7 +109,7 @@ const ProductList = ({ isAdmin = false }) => {
     setNewPhoto(null);
     setPreviewPhoto(
       product.photo_path
-        ? `http://localhost:5001/uploads/${product.photo_path}`
+        ? `https://kisanlink-project-1.onrender.com/uploads/${product.photo_path}`
         : null
     );
   };
@@ -125,7 +125,7 @@ const ProductList = ({ isAdmin = false }) => {
     else
       setPreviewPhoto(
         editForm.photo_path
-          ? `http://localhost:5001/uploads/${editForm.photo_path}`
+          ? `https://kisanlink-project-1.onrender.com/uploads/${editForm.photo_path}`
           : null
       );
   };
@@ -146,7 +146,7 @@ const handleUpdate = async (id) => {
       if (newPhoto) formData.append("photo", newPhoto);
 
       const res = await axios.put(
-        `http://localhost:5001/farmer/update-product/${id}`,
+        `https://kisanlink-project-1.onrender.com/farmer/update-product/${id}`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },

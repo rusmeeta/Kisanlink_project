@@ -12,7 +12,7 @@ const FarmerOrdersPage = () => {
       setLoading(true);
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch(`http://localhost:5001/orders/farmer/${farmerId}`, {
+      const response = await fetch(`https://kisanlink-project-1.onrender.com/orders/farmer/${farmerId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -37,7 +37,7 @@ const FarmerOrdersPage = () => {
     try {
       const farmerId = localStorage.getItem("userId");
       
-      const response = await fetch("https://kisanlink-project.onrender.com/orders/update-status", {
+      const response = await fetch("https://kisanlink-project-1.onrender.com/orders/update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

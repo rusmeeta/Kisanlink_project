@@ -29,7 +29,7 @@ const AddProduct = () => {
   useEffect(() => {
     const fetchFarmer = async () => {
       try {
-        const res = await axios.get("https://kisanlink-project.onrender.com/farmer/me", {
+        const res = await axios.get("https://kisanlink-project-1.onrender.com/farmer/me", {
           withCredentials: true,
         });
         setFarmer(res.data);
@@ -95,7 +95,7 @@ const AddProduct = () => {
       formData.append("photo", photo);
 
       const res = await axios.post(
-        "https://kisanlink-project.onrender.com/farmer/add-product",
+        "https://kisanlink-project-1.onrender.com/farmer/add-product",
         formData,
         { 
           headers: { "Content-Type": "multipart/form-data" }, 

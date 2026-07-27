@@ -17,7 +17,7 @@ const FarmerChat = () => {
   // Fetch current farmer info
   const fetchFarmer = async () => {
     try {
-      const res = await fetch("https://kisanlink-project.onrender.com/farmer/me", {
+      const res = await fetch("https://kisanlink-project-1.onrender.com/farmer/me", {
         credentials: "include",
       });
       if (res.ok) {
@@ -33,7 +33,7 @@ const FarmerChat = () => {
   const fetchConsumerInfo = async () => {
     // Try method 1: Get from auth endpoint
     try {
-      const res = await fetch(`http://localhost:5001/auth/users/${consumerId}`, {
+      const res = await fetch(`https://kisanlink-project-1.onrender.com/auth/users/${consumerId}`, {
         credentials: "include",
       });
       
@@ -51,7 +51,7 @@ const FarmerChat = () => {
     
     // Try method 2: Get from messages endpoint
     try {
-      const res = await fetch(`http://localhost:5001/messages/${consumerId}`, {
+      const res = await fetch(`https://kisanlink-project-1.onrender.com/messages/${consumerId}`, {
         credentials: "include",
       });
       
@@ -79,7 +79,7 @@ const FarmerChat = () => {
   // Fetch messages
   const fetchMessages = async () => {
     try {
-      const res = await fetch(`http://localhost:5001/messages/${consumerId}`, {
+      const res = await fetch(`https://kisanlink-project-1.onrender.com/messages/${consumerId}`, {
         credentials: "include",
       });
       
@@ -107,7 +107,7 @@ const FarmerChat = () => {
     if (!newMessage.trim()) return;
 
     try {
-      const res = await fetch(`http://localhost:5001/messages/${consumerId}`, {
+      const res = await fetch(`https://kisanlink-project-1.onrender.com/messages/${consumerId}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

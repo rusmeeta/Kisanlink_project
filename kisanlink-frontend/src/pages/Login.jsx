@@ -23,7 +23,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://kisanlink-project.onrender.com/auth/login", {
+      const response = await fetch("https://kisanlink-project-1.onrender.com/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -83,7 +83,7 @@ function Login() {
         return;
       }
 
-      const response = await fetch("https://kisanlink-project.onrender.com/auth/resend-verification", {
+      const response = await fetch("https://kisanlink-project-1.onrender.com/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToResend })

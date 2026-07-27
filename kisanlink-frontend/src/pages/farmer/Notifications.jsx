@@ -16,7 +16,7 @@ const FarmerNotifications = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:5001/notifications', {
+      const response = await fetch('https://kisanlink-project-1.onrender.com/notifications', {
         credentials: 'include',
         cache: 'no-store'
       });
@@ -59,7 +59,7 @@ const FarmerNotifications = () => {
       );
       
       // Then send API request
-      const response = await fetch(`http://localhost:5001/notifications/${notificationId}/read`, {
+      const response = await fetch(`https://kisanlink-project-1.onrender.com/notifications/${notificationId}/read`, {
         method: 'POST',
         credentials: 'include',
         headers: {

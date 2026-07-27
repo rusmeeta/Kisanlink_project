@@ -22,6 +22,7 @@ def admin_login():
         # 🔥 TEMPORARY HARDCODE – for testing only
         if email == 'admin@kisanlink.com' and password == 'admin123':
             session['user_id'] = 1   # or some valid ID
+            session['admin_id'] = 1   # or some valid ID
             session['user_type'] = 'admin'
             session['admin_logged_in'] = True
             session['admin_name'] = 'Admin'
@@ -1712,8 +1713,7 @@ def notify_low_stock():
 def deactivate_user_with_reason(user_id):
     """Deactivate a user with reason and notification"""
     if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Not authenticated'}),
-        401
+        return jsonify({'error': 'Not authenticated'}),401
     
     try:
         data = request.get_json()

@@ -41,7 +41,7 @@ const EditRequestsPage = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const response = await axios.get("https://kisanlink-project.onrender.com/admin/check-auth", {
+      const response = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
 
@@ -58,7 +58,7 @@ const EditRequestsPage = () => {
   const loadEditRequests = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("https://kisanlink-project.onrender.com/admin/edit-requests/pending", {
+      const response = await axios.get("https://kisanlink-project-1.onrender.com/admin/edit-requests/pending", {
         withCredentials: true
       });
       
@@ -105,7 +105,7 @@ const EditRequestsPage = () => {
     try {
       setIsProcessing(true);
       const response = await axios.post(
-        `http://localhost:5001/admin/edit-requests/${requestId}/approve`,
+        `https://kisanlink-project-1.onrender.com/admin/edit-requests/${requestId}/approve`,
         {},
         { withCredentials: true }
       );
@@ -136,7 +136,7 @@ const EditRequestsPage = () => {
     try {
       setIsProcessing(true);
       const response = await axios.post(
-        `http://localhost:5001/admin/edit-requests/${requestId}/reject`,
+        `https://kisanlink-project-1.onrender.com/admin/edit-requests/${requestId}/reject`,
         { reason: rejectReason },
         { withCredentials: true }
       );
