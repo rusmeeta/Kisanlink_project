@@ -21,53 +21,10 @@ class ConsumerPurchaseHistory(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-class CartItem(db.Model):
-    __tablename__ = "cart_items"
-
-    id = db.Column(db.Integer, primary_key=True)
-    consumer_id = db.Column(db.Integer)
-    product_id = db.Column(db.Integer)
-    quantity = db.Column(db.Integer)
 
 
-class Order(db.Model):
-    __tablename__ = "orders"
-    __table_args__ = {'extend_existing': True} 
-
-    id = db.Column(db.Integer, primary_key=True)
-    consumer_id = db.Column(db.Integer)
-    farmer_id = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(50), default="pending")
 
 
-class OrderItem(db.Model):
-    __tablename__ = "order_items"
-    __table_args__ = {'extend_existing': True} 
-
-    id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer)
-    product_id = db.Column(db.Integer)
-    quantity = db.Column(db.Integer)
 
 
-class Message(db.Model):
-    __tablename__ = "messages"
-    __table_args__ = {'extend_existing': True} 
 
-    id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer)
-    receiver_id = db.Column(db.Integer)
-    content = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class Notification(db.Model):
-    __tablename__ = "notifications"
-    __table_args__ = {'extend_existing': True} 
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer)
-    message = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    seen = db.Column(db.Boolean, default=False)

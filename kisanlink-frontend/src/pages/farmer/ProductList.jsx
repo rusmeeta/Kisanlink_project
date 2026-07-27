@@ -36,8 +36,8 @@ const ProductList = ({ isAdmin = false }) => {
     setLoading(true);
     try {
       const url = isAdmin 
-        ? "https://kisanlink-project.onrender.com/admin/products"
-        : "https://kisanlink-project.onrender.com/farmer/products";
+        ? "https://kisanlink-project-1.onrender.com/admin/products"
+        : "https://kisanlink-project-1.onrender.com/farmer/products";
       
       const res = await axios.get(url, { withCredentials: true });
       
@@ -390,7 +390,7 @@ const handleUpdate = async (id) => {
                         )
                       ) : product.photo_path ? (
                         <img
-                          src={`http://localhost:5001/uploads/${product.photo_path}`}
+                          src={`https://kisanlink-project-1.onrender.com/uploads/${product.photo_path}`}
                           alt={product.item_name}
                           className="w-full h-full object-cover"
                           onError={(e) => {

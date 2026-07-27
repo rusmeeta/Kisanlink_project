@@ -8,6 +8,7 @@ from models_user import User
 notifications_bp = Blueprint("notifications", __name__)
 
 @notifications_bp.route("/", methods=["GET"])
+@notifications_bp.route("", methods=["GET"])
 def get_notifications():
     if "user_id" not in session:
         return jsonify({"status": "error", "message": "Not logged in"}), 401

@@ -742,3 +742,36 @@ def test_endpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@farmer_bp.route("/delete-product/<int:product_id>", methods=["DELETE"])
+def delete_own_product(product_id):
+    """Farmer deletes their own product"""
+    try:
+        farmer_id = session.get("user_id")
+        if not farmer_id:
+            return jsonify({"error": "Not logged in"}), 401
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Verify the product belongs to this farmer
+        cur.execute(
+            "SELECT id FROM farmer_items WHERE id=%s AND farmer_id=%s",
+            (product_id, farmer_id)
+        )
+        product = cur.fetchone()
+
+        if not product:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Product not found or unauthorized"}), 404
+
+        cur.execute("DELETE FROM farmer_items WHERE id=%s", (product_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"message": "Product deleted successfully"}), 200
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({"error": str(e)}), 500
