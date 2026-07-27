@@ -114,13 +114,13 @@ def signup():
             print(f"✅ User created (unverified): {email}")
             
             # Send verification email
-            email_sent = email_service.send_verification_email(email, verification_token, fullname)
+            #email_sent = email_service.send_verification_email(email, verification_token, fullname)
             
             return jsonify({
                 "success": True,
                 "message": "Account created! Check your email for verification link.",
                 "user_id": user_id,
-                "email_sent": email_sent,
+                "email_sent": False,
                 "note": "You must verify email before logging in"
             }), 201
             
