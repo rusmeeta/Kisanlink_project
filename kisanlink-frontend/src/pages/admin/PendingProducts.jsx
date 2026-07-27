@@ -47,7 +47,7 @@ const PendingProducts = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const response = await axios.get("https://kisanlink-project.onrender-1.com/admin/check-auth", {
+      const response = await axios.get("https://kisanlink-project-1.onrender.com/admin/check-auth", {
         withCredentials: true
       });
 
