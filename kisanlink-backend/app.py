@@ -117,6 +117,21 @@ try:
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
     cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_complaints (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            user_type VARCHAR(20) NOT NULL DEFAULT 'consumer',
+            complaint_text TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            admin_reply TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+    # NEW: fix missing column bug from earlier
+    cur.execute("ALTER TABLE farmer_items ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT FALSE;")
     conn.commit()
     cur.close()
     conn.close()
