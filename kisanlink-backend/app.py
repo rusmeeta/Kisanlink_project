@@ -117,9 +117,12 @@ try:
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);")
-    cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL;")
+    cur.execute("UPDATE users SET is_active = TRUE, is_email_verified = TRUE WHERE is_active IS NULL OR is_email_verified IS NULL OR is_email_verified = FALSE;")
 
     # NEW: users - deactivation/reactivation columns
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivation_reason TEXT;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivation_reason TEXT;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivation_type VARCHAR(20);")
@@ -127,8 +130,6 @@ try:
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reactivated_at TIMESTAMP;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reactivation_reason TEXT;")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP;")
-    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0;")
-    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS user_complaints (
             id SERIAL PRIMARY KEY,

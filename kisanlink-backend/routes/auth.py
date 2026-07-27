@@ -101,7 +101,7 @@ def signup():
                 INSERT INTO users 
                 (fullname, email, password_hash, location, user_type, 
                  latitude, longitude, is_email_verified, verification_token)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, %s)
                 RETURNING id
             """, (
                 fullname, email, hashed_password, location, user_type,
@@ -217,7 +217,7 @@ def verify_email(token):
                 <p>Your email <strong>{email}</strong> has been verified successfully.</p>
                 <p>Your account is now active.</p>
                 
-                <a href="http://localhost:3000/login" 
+                <a href="https://kisanlink-project-1.onrender.com/login" 
                    style="display: inline-block; background: #4CAF50; color: white; 
                           padding: 12px 30px; text-decoration: none; border-radius: 5px; 
                           margin-top: 20px; font-weight: bold;">
@@ -290,12 +290,7 @@ def login_api():
             }), 403
         
         # Check if email is verified
-        if not is_verified:
-            return jsonify({
-                "error": "Please verify your email before logging in.",
-                "needs_verification": True,
-                "email": email
-            }), 403
+        
         
         # Check password
         if not check_password_hash(db_password, password):
